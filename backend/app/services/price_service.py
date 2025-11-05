@@ -217,154 +217,26 @@ class PriceService:
                             "message": f"从数据库找到 {len(products)} 个商品"
                         }
         except Exception as e:
-            logger.warning(f"数据库价格对比失败，回退到API搜索: {e}")
-
-        # 如果数据库结果不足，使用购物服务搜索（可能调用API）
-        from ..models.schemas import ProductSearchRequest
-        
-        search_request = ProductSearchRequest(
-            query=query,
-            platforms=platforms,
-            page=1,
-            page_size=20
-        )
-
-        try:
-            search_results = await self.shopping_service.search_products(search_request)
-        except Exception as e:
-            logger.error(f"Error calling shopping_service.search_products: {e}")
+            logger.warning(f"数据库价格对比失败: {e}")
+            # 不再回退到API，直接返回空结果
             return {
                 "query": query,
                 "comparison": {},
                 "total_products": 0,
                 "search_time": 0,
-                "error": str(e)
+                "data_source": "database",
+                "message": "数据库查询失败，请确保已上传商品数据到数据库。价格对比功能仅使用数据库中的数据，不调用外部API。"
             }
 
-        # 处理返回结果 - 可能是字典或响应对象
-        products = []
-        
-        try:
-            # 确保search_results不为None
-            if search_results is None:
-                logger.warning("search_results is None")
-                search_results = {}
-            
-            if isinstance(search_results, dict):
-                products_list = search_results.get("products", [])
-            elif hasattr(search_results, "products"):
-                products_list = search_results.products
-            elif hasattr(search_results, "data") and hasattr(search_results.data, "products"):
-                products_list = search_results.data.products
-            else:
-                products_list = []
-            
-            # 转换为字典列表
-            for product in products_list:
-                try:
-                    if isinstance(product, dict):
-                        products.append(product)
-                    elif hasattr(product, "dict"):
-                        products.append(product.dict())
-                    elif hasattr(product, "__dict__"):
-                        products.append(vars(product))
-                    elif hasattr(product, "model_dump"):  # Pydantic v2
-                        products.append(product.model_dump())
-                    else:
-                        # 尝试提取基本属性
-                        products.append({
-                            "title": getattr(product, "title", getattr(product, "name", "")),
-                            "price": getattr(product, "price", 0),
-                            "platform": getattr(product, "platform", ""),
-                            "product_id": getattr(product, "product_id", "")
-                        })
-                except Exception as e:
-                    logger.warning(f"Error converting product to dict: {e}")
-                    continue
-                    
-        except Exception as e:
-            logger.error(f"Error processing search results: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            products = []
-
-        # 按商品名称分组对比价格
-        comparison = {}
-        for product in products:
-            if not isinstance(product, dict):
-                continue
-                
-            title = product.get("title", product.get("name", ""))
-            price = product.get("price", 0)
-            platform = product.get("platform", "")
-            
-            if not title:
-                continue
-            
-            product_key = self._normalize_product_name(title)
-            if product_key not in comparison:
-                comparison[product_key] = []
-            comparison[product_key].append({
-                "title": title,
-                "price": price,
-                "platform": platform,
-                "_product_obj": product  # 保存原始对象以便后续使用
-            })
-
-        # 分析每个商品组的价格差异
-        analysis = {}
-        for product_key, product_list in comparison.items():
-            if len(product_list) > 1:
-                # 提取价格
-                prices = []
-                for p in product_list:
-                    if isinstance(p, dict):
-                        price = p.get("price", 0)
-                    else:
-                        price = getattr(p, "price", 0)
-                    if price and price > 0:
-                        prices.append(price)
-                
-                if prices:
-                    min_price = min(prices)
-                    max_price = max(prices)
-                    price_diff = max_price - min_price
-                    
-                    # 找到最低价格的平台
-                    best_platform = ""
-                    for p in product_list:
-                        if isinstance(p, dict):
-                            p_price = p.get("price", 0)
-                            p_platform = p.get("platform", "")
-                        else:
-                            p_price = getattr(p, "price", 0)
-                            p_platform = getattr(p, "platform", "")
-                        
-                        if p_price == min_price:
-                            best_platform = p_platform
-                            break
-                    
-                    analysis[product_key] = {
-                        "products": product_list,
-                        "min_price": min_price,
-                        "max_price": max_price,
-                        "price_difference": price_diff,
-                        "savings_percentage": (price_diff / max_price) * 100 if max_price > 0 else 0,
-                        "best_platform": best_platform
-                    }
-
-        # 处理搜索结果的products字段
-        total_products = 0
-        if isinstance(search_results, dict):
-            total_products = len(search_results.get("products", []))
-        elif hasattr(search_results, "products"):
-            total_products = len(search_results.products) if search_results.products else 0
-        
+        # 如果数据库没有结果，直接返回空结果，不再调用API
+        logger.info("数据库中未找到匹配的商品，价格对比功能仅使用数据库数据")
         return {
             "query": query,
-            "comparison": analysis,
-            "total_products": total_products,
-            "search_time": search_results.get("search_time", 0) if isinstance(search_results, dict) else getattr(search_results, "search_time", 0)
+            "comparison": {},
+            "total_products": 0,
+            "search_time": 0,
+            "data_source": "database",
+            "message": "未找到匹配的商品。价格对比功能仅使用数据库中的数据（来自products_data.json），请确保已上传商品数据到数据库。如果需要添加新商品，请使用商品管理API上传数据。"
         }
 
     async def track_price_changes(self, product_id: int, days: int = 30) -> Dict:
