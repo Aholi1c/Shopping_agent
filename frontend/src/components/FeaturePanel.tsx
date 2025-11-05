@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  KnowledgeBase, Agent, FeatureToggle,
-  CollaborationType
+  KnowledgeBase, Agent, FeatureToggle
 } from '../types';
 import {
-  ragAPI, agentAPI, enhancedChatAPI
+  ragAPI, agentAPI
 } from '../services/api';
+
+type CollaborationType = 'sequential' | 'parallel' | 'hierarchical';
 
 interface FeaturePanelProps {
   onFeatureChange: (features: FeatureToggle) => void;
@@ -26,8 +27,7 @@ export const FeaturePanel: React.FC<FeaturePanelProps> = ({
     selectedAgents: [],
     collaborationType: 'sequential'
   });
-  const [loading, setLoading] = useState(false);
-
+  
   useEffect(() => {
     loadKnowledgeBases();
     loadAgents();

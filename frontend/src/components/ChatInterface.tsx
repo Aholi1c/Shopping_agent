@@ -1,8 +1,41 @@
 import React, { useState, useEffect, useRef } from 'react';
+import {
+  Card,
+  Input,
+  Button,
+  Space,
+  Avatar,
+  Typography,
+  Badge,
+  Divider,
+  Tooltip,
+  Drawer,
+  List,
+  Tag,
+  Progress,
+  Spin,
+  message
+} from 'antd';
+import {
+  SendOutlined,
+  PaperClipOutlined,
+  AudioOutlined,
+  StopOutlined,
+  SettingOutlined,
+  UserOutlined,
+  RobotOutlined,
+  ClockCircleOutlined,
+  CheckCircleOutlined,
+  ThunderboltOutlined,
+  DatabaseOutlined,
+  TeamOutlined
+} from '@ant-design/icons';
 import { Message, Conversation, ChatRequest, FeatureToggle } from '../types';
-import { chatAPI, enhancedChatAPI } from '../services/api';
-import { websocketService } from '../services/websocket';
+import { chatAPI } from '../services/api';
 import { FeaturePanel } from './FeaturePanel';
+
+const { TextArea } = Input;
+const { Text, Paragraph } = Typography;
 
 interface ChatInterfaceProps {
   conversationId?: number;
@@ -16,13 +49,11 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [currentResponse, setCurrentResponse] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [recording, setRecording] = useState(false);
   const [sessionId] = useState(() => `session_${Date.now()}`);
   const [features, setFeatures] = useState<FeatureToggle>({
-    useMemory: true,
+    useMemory: false,
     useRAG: false,
     useAgentCollaboration: false,
     selectedKnowledgeBases: [],
@@ -30,62 +61,21 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     collaborationType: 'sequential'
   });
   const [showFeaturePanel, setShowFeaturePanel] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // Load conversation messages if conversationId is provided
     if (conversationId) {
       loadConversationMessages(conversationId);
     }
-
-    // Set up WebSocket event handlers
-    websocketService.onMessage('chat_start', (data) => {
-      setIsTyping(true);
-      setCurrentResponse('');
-    });
-
-    websocketService.onMessage('chat_chunk', (data) => {
-      setCurrentResponse(prev => prev + data.content);
-    });
-
-    websocketService.onMessage('chat_complete', (data) => {
-      setIsTyping(false);
-      setCurrentResponse('');
-      if (onConversationChange && data.conversation_id) {
-        // Refresh conversation
-        loadConversationMessages(data.conversation_id);
-      }
-    });
-
-    websocketService.onMessage('processing', (data) => {
-      setIsLoading(true);
-    });
-
-    websocketService.onMessage('error', (data) => {
-      setIsLoading(false);
-      setIsTyping(false);
-      alert(data.message);
-    });
-
-    // Connect to WebSocket
-    websocketService.connect().catch(console.error);
-
-    return () => {
-      // Clean up WebSocket handlers
-      websocketService.offMessage('chat_start');
-      websocketService.offMessage('chat_chunk');
-      websocketService.offMessage('chat_complete');
-      websocketService.offMessage('processing');
-      websocketService.offMessage('error');
-      websocketService.disconnect();
-    };
-  }, [conversationId, onConversationChange]);
+  }, [conversationId]);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, currentResponse]);
+  }, [messages]);
 
   const loadConversationMessages = async (convId: number) => {
     try {
@@ -103,14 +93,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const handleSendMessage = async () => {
     if (!inputMessage.trim() && !selectedFile) return;
 
-    // Check if any advanced features are enabled
-    const useEnhancedChat = features.useMemory || features.useRAG || features.useAgentCollaboration;
-
-    if (useEnhancedChat) {
-      await handleEnhancedSendMessage();
-    } else {
-      await handleRegularSendMessage();
-    }
+    await handleRegularSendMessage();
   };
 
   const handleRegularSendMessage = async () => {
@@ -118,80 +101,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       message: inputMessage,
       conversation_id: conversationId,
       message_type: selectedFile ? 'image' : 'text',
-      model: 'gpt-3.5-turbo',
+      model: process.env.REACT_APP_LLM_PROVIDER === 'bigmodel' ? 'glm-4-0520' : 'gpt-3.5-turbo',
     };
 
-    // Add user message to the list
-    const userMessage: Message = {
-      id: Date.now(),
-      conversation_id: conversationId || 0,
-      role: 'user',
-      content: inputMessage,
-      message_type: selectedFile ? 'image' : 'text',
-      created_at: new Date().toISOString(),
-    };
-    setMessages(prev => [...prev, userMessage]);
-
-    setInputMessage('');
-    setSelectedFile(null);
-
-    try {
-      if (selectedFile) {
-        // Send with file upload
-        const formData = new FormData();
-        formData.append('message', request.message);
-        if (request.conversation_id) {
-          formData.append('conversation_id', request.conversation_id.toString());
-        }
-        formData.append('model', request.model);
-        formData.append('file', selectedFile);
-
-        const response = await chatAPI.sendMessageWithFile(formData);
-
-        // Add assistant response
-        const assistantMessage: Message = {
-          id: response.message_id,
-          conversation_id: response.conversation_id,
-          role: 'assistant',
-          content: response.response,
-          message_type: 'text',
-          created_at: new Date().toISOString(),
-        };
-        setMessages(prev => [...prev, assistantMessage]);
-
-        if (onConversationChange) {
-          const conversation = await chatAPI.getConversation(response.conversation_id);
-          onConversationChange(conversation);
-        }
-      } else {
-        // Send via WebSocket for streaming
-        websocketService.sendChatMessage(
-          request.message,
-          request.conversation_id,
-          request.model
-        );
-      }
-    } catch (error) {
-      console.error('Failed to send message:', error);
-      alert('Failed to send message');
-    }
-  };
-
-  const handleEnhancedSendMessage = async () => {
-    const enhancedRequest = {
-      message: inputMessage,
-      conversation_id: conversationId,
-      message_type: selectedFile ? 'image' : 'text',
-      model: 'gpt-3.5-turbo',
-      use_memory: features.useMemory,
-      use_rag: features.useRAG,
-      knowledge_base_ids: features.selectedKnowledgeBases.length > 0 ? features.selectedKnowledgeBases : undefined,
-      agent_collaboration: features.useAgentCollaboration,
-      collaboration_type: features.collaborationType,
-      agents: features.selectedAgents.length > 0 ? features.selectedAgents : undefined,
-    };
-
-    // Add user message to the list
     const userMessage: Message = {
       id: Date.now(),
       conversation_id: conversationId || 0,
@@ -205,11 +117,31 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setInputMessage('');
     setSelectedFile(null);
     setIsLoading(true);
+    setIsTyping(true);
+
+    // Simulate typing delay for better UX
+    setTimeout(() => {
+      setIsTyping(false);
+    }, 1000);
 
     try {
-      const response = await enhancedChatAPI.sendEnhancedMessage(enhancedRequest);
+      let response;
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('message', request.message);
+        if (request.conversation_id) {
+          formData.append('conversation_id', request.conversation_id.toString());
+        }
+        if (request.model) {
+          formData.append('model', request.model);
+        }
+        formData.append('file', selectedFile);
 
-      // Add assistant response
+        response = await chatAPI.sendMessageWithFile(formData);
+      } else {
+        response = await chatAPI.sendMessage(request);
+      }
+
       const assistantMessage: Message = {
         id: response.message_id,
         conversation_id: response.conversation_id,
@@ -225,8 +157,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         onConversationChange(conversation);
       }
     } catch (error) {
-      console.error('Failed to send enhanced message:', error);
-      alert('Failed to send enhanced message');
+      console.error('Failed to send message:', error);
+      message.error('发送消息失败，请重试');
     } finally {
       setIsLoading(false);
     }
@@ -264,7 +196,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setRecording(true);
     } catch (error) {
       console.error('Failed to start recording:', error);
-      alert('Failed to access microphone');
+      message.error('无法访问麦克风，请检查权限设置');
     }
   };
 
@@ -282,152 +214,374 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   };
 
+  const formatTime = (timeString: string) => {
+    return new Date(timeString).toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getActiveFeatures = () => {
+    const activeFeatures = [];
+    if (features.useMemory) activeFeatures.push({ name: '记忆系统', icon: <DatabaseOutlined />, color: 'green' });
+    if (features.useRAG) activeFeatures.push({ name: '知识库', icon: <ThunderboltOutlined />, color: 'blue' });
+    if (features.useAgentCollaboration) activeFeatures.push({ name: '多智能体', icon: <TeamOutlined />, color: 'purple' });
+    return activeFeatures;
+  };
+
+  const activeFeatures = getActiveFeatures();
+
   return (
-    <div className="flex flex-col h-full bg-white rounded-lg shadow-lg">
-      {/* Feature panel toggle */}
-      <div className="border-b p-2 flex justify-between items-center">
-        <button
-          onClick={() => setShowFeaturePanel(!showFeaturePanel)}
-          className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-        >
-          {showFeaturePanel ? 'Hide Features' : 'Show Advanced Features'}
-        </button>
-        <div className="text-xs text-gray-500">
-          {features.useMemory && '🧠 Memory '}
-          {features.useRAG && '📚 RAG '}
-          {features.useAgentCollaboration && '🤖 Agents'}
+    <div style={{
+      height: '100%',
+      display: 'flex',
+      flexDirection: 'column',
+      background: '#f8fafc'
+    }}>
+      {/* 顶部工具栏 */}
+      <div style={{
+        padding: '16px 20px',
+        background: 'white',
+        borderBottom: '1px solid #e5e7eb',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <RobotOutlined style={{ color: 'white', fontSize: 18 }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#1f2937' }}>智能购物助手</div>
+            <div style={{ fontSize: 12, color: '#6b7280' }}>基于 GLM-4.5 的 AI 对话</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {activeFeatures.map((feature, index) => (
+            <Tooltip key={index} title={feature.name}>
+              <Tag color={feature.color} style={{ cursor: 'pointer' }}>
+                {feature.icon} {feature.name}
+              </Tag>
+            </Tooltip>
+          ))}
+
+          <Button
+            type="text"
+            icon={<SettingOutlined />}
+            onClick={() => setShowFeaturePanel(true)}
+            style={{ color: '#6b7280' }}
+          >
+            高级设置
+          </Button>
         </div>
       </div>
 
-      {/* Feature panel */}
-      {showFeaturePanel && (
-        <div className="border-b">
-          <FeaturePanel
-            onFeatureChange={handleFeatureChange}
-            sessionId={sessionId}
-          />
-        </div>
-      )}
-
-      {/* Messages container */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
+      {/* 消息区域 */}
+      <div style={{
+        flex: 1,
+        overflowY: 'auto',
+        padding: '20px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px'
+      }}>
+        {messages.length === 0 ? (
+          <div style={{
+            textAlign: 'center',
+            padding: '60px 20px',
+            color: '#6b7280'
+          }}>
+            <div style={{ fontSize: 48, marginBottom: '16px' }}>🛍️</div>
+            <div style={{ fontSize: 18, fontWeight: 600, marginBottom: '8px', color: '#1f2937' }}>
+              欢迎使用智能购物助手
+            </div>
+            <div style={{ fontSize: 14, color: '#6b7280' }}>
+              我可以帮助您查找商品、比较价格、提供购物建议
+            </div>
+            <div style={{ marginTop: '16px', fontSize: 12, color: '#9ca3af' }}>
+              💡 您可以尝试询问："帮我找一款性价比高的手机"
+            </div>
+          </div>
+        ) : (
+          messages.map((message) => (
             <div
-              className={`message-bubble ${
-                message.role === 'user' ? 'message-user' : 'message-assistant'
-              } slide-in`}
+              key={message.id}
+              style={{
+                display: 'flex',
+                justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start',
+                marginBottom: '16px'
+              }}
             >
-              {message.message_type === 'image' && message.media_url && (
-                <img
-                  src={message.media_url}
-                  alt="Uploaded content"
-                  className="max-w-full h-auto mb-2 rounded"
-                />
-              )}
-              <div className="whitespace-pre-wrap">{message.content}</div>
-              <div className="text-xs mt-1 opacity-75">
-                {new Date(message.created_at).toLocaleTimeString()}
-              </div>
-            </div>
-          </div>
-        ))}
+              <div style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '12px',
+                maxWidth: message.role === 'user' ? '70%' : '60%'
+              }}>
+                {message.role === 'assistant' && (
+                  <Avatar
+                    icon={<RobotOutlined />}
+                    style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+                  />
+                )}
 
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="message-bubble message-assistant">
-              <div className="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
+                <div>
+                  <Card
+                    style={{
+                      boxShadow: message.role === 'user' ? '0 2px 8px rgba(0,0,0,0.1)' : '0 2px 8px rgba(0,0,0,0.05)',
+                      border: message.role === 'user' ? 'none' : '1px solid #e5e7eb'
+                    }}
+                    bodyStyle={{
+                      padding: '16px 20px',
+                      background: message.role === 'user' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : 'white',
+                      borderRadius: message.role === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px'
+                    }}
+                  >
+                    {message.message_type === 'image' && message.media_url && (
+                      <div style={{ marginBottom: '12px' }}>
+                        <img
+                          src={message.media_url}
+                          alt="Uploaded content"
+                          style={{
+                            maxWidth: '100%',
+                            borderRadius: '8px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    <div style={{
+                      fontSize: 14,
+                      lineHeight: '1.6',
+                      color: message.role === 'user' ? 'white' : '#1f2937',
+                      whiteSpace: 'pre-wrap'
+                    }}>
+                      {message.content}
+                    </div>
+
+                    <div style={{
+                      marginTop: '8px',
+                      fontSize: 11,
+                      color: message.role === 'user' ? 'rgba(255,255,255,0.8)' : '#9ca3af',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}>
+                      <ClockCircleOutlined style={{ fontSize: 10 }} />
+                      {formatTime(message.created_at)}
+                      {message.role === 'user' && (
+                        <CheckCircleOutlined style={{ fontSize: 10, marginLeft: '4px' }} />
+                      )}
+                    </div>
+                  </Card>
+                </div>
+
+                {message.role === 'user' && (
+                  <Avatar
+                    icon={<UserOutlined />}
+                    style={{ background: '#e5e7eb' }}
+                  />
+                )}
               </div>
-              {currentResponse && (
-                <div className="mt-2 whitespace-pre-wrap">{currentResponse}</div>
-              )}
             </div>
-          </div>
+          ))
         )}
 
-        {isLoading && (
-          <div className="flex justify-center">
-            <div className="text-gray-500">Processing...</div>
+        {/* 输入状态指示器 */}
+        {(isLoading || isTyping) && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'flex-start',
+            marginBottom: '16px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+              <Avatar
+                icon={<RobotOutlined />}
+                style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
+              />
+              <Card
+                style={{
+                  border: '1px solid #e5e7eb',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                }}
+                bodyStyle={{
+                  padding: '12px 20px',
+                  background: 'white',
+                  borderRadius: '18px 18px 18px 4px'
+                }}
+              >
+                {isTyping ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <Spin size="small" />
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginLeft: '8px' }}>
+                      正在思考中...
+                    </Text>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <Spin size="small" />
+                    <Text style={{ fontSize: 12, color: '#6b7280', marginLeft: '8px' }}>
+                      正在处理请求...
+                    </Text>
+                  </div>
+                )}
+              </Card>
+            </div>
           </div>
         )}
 
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input area */}
-      <div className="border-t p-4">
+      {/* 输入区域 */}
+      <div style={{
+        padding: '20px',
+        background: 'white',
+        borderTop: '1px solid #e5e7eb'
+      }}>
+        {/* 文件预览 */}
         {selectedFile && (
-          <div className="mb-2 p-2 bg-gray-100 rounded flex items-center justify-between">
-            <span className="text-sm">{selectedFile.name}</span>
-            <button
+          <div style={{
+            marginBottom: '16px',
+            padding: '12px',
+            background: '#f3f4f6',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <PaperClipOutlined style={{ color: '#6b7280' }} />
+              <Text style={{ fontSize: 12, color: '#374151' }}>
+                {selectedFile.name}
+              </Text>
+              <Text style={{ fontSize: 11, color: '#6b7280' }}>
+                ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+              </Text>
+            </div>
+            <Button
+              type="text"
+              size="small"
               onClick={() => setSelectedFile(null)}
-              className="text-red-500 hover:text-red-700"
+              style={{ color: '#ef4444' }}
             >
-              ×
-            </button>
+              移除
+            </Button>
           </div>
         )}
 
-        <div className="flex items-end space-x-2">
-          <div className="flex-1">
-            <textarea
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end' }}>
+          <div style={{ flex: 1 }}>
+            <TextArea
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message..."
-              className="w-full p-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-              rows={1}
+              placeholder="请输入您的问题..."
+              autoSize={{ minRows: 1, maxRows: 4 }}
+              style={{
+                borderRadius: '12px',
+                border: '1px solid #e5e7eb',
+                fontSize: 14,
+                resize: 'none'
+              }}
               disabled={isLoading || recording}
             />
           </div>
 
-          <div className="flex space-x-2">
-            {/* File upload button */}
+          <div style={{ display: 'flex', gap: '8px' }}>
             <input
               type="file"
               ref={fileInputRef}
               onChange={handleFileSelect}
               accept="image/*,audio/*"
-              className="hidden"
+              style={{ display: 'none' }}
             />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="p-3 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Upload file"
-            >
-              📎
-            </button>
 
-            {/* Voice recording button */}
-            <button
-              onClick={recording ? stopRecording : startRecording}
-              className={`p-3 rounded-lg transition-colors ${
-                recording
-                  ? 'bg-red-500 text-white hover:bg-red-600'
-                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
-              }`}
-              title={recording ? 'Stop recording' : 'Start recording'}
-            >
-              {recording ? '⏹️' : '🎤'}
-            </button>
+            <Tooltip title="上传文件">
+              <Button
+                icon={<PaperClipOutlined />}
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  borderRadius: '8px',
+                  border: '1px solid #e5e7eb',
+                  height: '44px',
+                  width: '44px'
+                }}
+                disabled={isLoading || recording}
+              />
+            </Tooltip>
 
-            {/* Send button */}
-            <button
+            <Tooltip title={recording ? '停止录音' : '语音输入'}>
+              <Button
+                icon={recording ? <StopOutlined /> : <AudioOutlined />}
+                onClick={recording ? stopRecording : startRecording}
+                style={{
+                  borderRadius: '8px',
+                  height: '44px',
+                  width: '44px',
+                  ...(recording ? {
+                    background: '#ef4444',
+                    borderColor: '#ef4444',
+                    color: 'white'
+                  } : {
+                    border: '1px solid #e5e7eb'
+                  })
+                }}
+                disabled={isLoading}
+              />
+            </Tooltip>
+
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
               onClick={handleSendMessage}
               disabled={isLoading || (!inputMessage.trim() && !selectedFile)}
-              className="p-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              style={{
+                borderRadius: '8px',
+                height: '44px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                border: 'none'
+              }}
             >
-              Send
-            </button>
+              发送
+            </Button>
           </div>
         </div>
+
+        <div style={{
+          marginTop: '8px',
+          textAlign: 'center',
+          fontSize: 11,
+          color: '#9ca3af'
+        }}>
+          按 Enter 发送，Shift + Enter 换行
+        </div>
       </div>
+
+      {/* 高级功能抽屉 */}
+      <Drawer
+        title="高级功能设置"
+        placement="right"
+        onClose={() => setShowFeaturePanel(false)}
+        open={showFeaturePanel}
+        width={400}
+        bodyStyle={{ padding: '20px' }}
+      >
+        <FeaturePanel
+          onFeatureChange={handleFeatureChange}
+          sessionId={sessionId}
+        />
+      </Drawer>
     </div>
   );
 };

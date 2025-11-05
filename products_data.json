@@ -1,0 +1,63 @@
+{
+  "products": [
+    {
+      "platform": "jd",
+      "product_id": "100012043978",
+      "title": "Apple iPhone 15 Pro 256GB 原色钛金属",
+      "price": 7999.0,
+      "original_price": 8999.0,
+      "discount_rate": 11.1,
+      "category": "手机",
+      "brand": "Apple",
+      "description": "Apple iPhone 15 Pro采用钛金属设计，配备A17 Pro芯片，支持Action按钮，全新4800万像素主摄像头。",
+      "image_url": "https://img14.360buyimg.com/n1/jfs/t1/123456/example.jpg",
+      "product_url": "https://item.jd.com/100012043978.html",
+      "rating": 4.8,
+      "review_count": 1250,
+      "sales_count": 5000,
+      "stock_status": "有货",
+      "specs": {
+        "存储容量": "256GB",
+        "屏幕尺寸": "6.1英寸",
+        "处理器": "A17 Pro",
+        "内存": "8GB",
+        "后置摄像头": "4800万像素",
+        "颜色": "原色钛金属"
+      }
+    },
+    {
+      "platform": "taobao",
+      "product_id": "12345678901",
+      "title": "Apple iPhone 15 Pro 256GB 原色钛金属 官方正品",
+      "price": 7899.0,
+      "original_price": 8999.0,
+      "discount_rate": 12.2,
+      "category": "手机",
+      "brand": "Apple",
+      "description": "Apple iPhone 15 Pro 256GB 原色钛金属 官方正品 全国联保",
+      "image_url": "https://img.alicdn.com/imgextra/i1/example.jpg",
+      "product_url": "https://item.taobao.com/item.htm?id=12345678901",
+      "rating": 4.7,
+      "review_count": 890,
+      "sales_count": 3200,
+      "stock_status": "有货"
+    },
+    {
+      "platform": "pdd",
+      "product_id": "987654321",
+      "title": "iPhone 15 Pro 256GB 原色钛金属",
+      "price": 7699.0,
+      "original_price": 8999.0,
+      "discount_rate": 14.4,
+      "category": "手机",
+      "brand": "Apple",
+      "description": "iPhone 15 Pro 256GB 原色钛金属 正品保证",
+      "image_url": "https://img.pddpic.com/example.jpg",
+      "product_url": "https://mobile.yangkeduo.com/goods.html?goods_id=987654321",
+      "rating": 4.6,
+      "review_count": 560,
+      "sales_count": 1800,
+      "stock_status": "有货"
+    }
+  ]
+}

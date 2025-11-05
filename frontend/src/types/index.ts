@@ -185,6 +185,19 @@ export interface EnhancedChatResponse {
   processing_time?: number;
 }
 
+// 平台类型
+export enum PlatformType {
+  JD = 'jd',
+  TAOBAO = 'taobao',
+  PDD = 'pdd',
+  XIAOHONGSHU = 'xiaohongshu',
+  DOUYIN = 'douyin',
+  OTHER = 'other'
+}
+
+// 协作类型
+export type CollaborationType = 'sequential' | 'parallel' | 'hierarchical';
+
 // 功能开关类型
 export interface FeatureToggle {
   useMemory: boolean;
@@ -192,5 +205,5 @@ export interface FeatureToggle {
   useAgentCollaboration: boolean;
   selectedKnowledgeBases: number[];
   selectedAgents: number[];
-  collaborationType: 'sequential' | 'parallel' | 'hierarchical';
+  collaborationType: CollaborationType;
 }

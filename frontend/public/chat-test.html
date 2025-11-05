@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能对话功能测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .chat-container {
+            height: 500px;
+            padding: 20px;
+            overflow-y: auto;
+            background: #fafafa;
+        }
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+        }
+        .user-message {
+            justify-content: flex-end;
+        }
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+        .user-message .message-content {
+            background: #1890ff;
+            color: white;
+            border-radius: 18px 18px 4px 18px;
+        }
+        .bot-message .message-content {
+            background: white;
+            border: 1px solid #e8e8e8;
+            border-radius: 18px 18px 18px 4px;
+        }
+        .input-container {
+            padding: 20px;
+            border-top: 1px solid #e8e8e8;
+            display: flex;
+            gap: 10px;
+        }
+        .input-field {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #d9d9d9;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        .send-button {
+            padding: 12px 24px;
+            background: #1890ff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .send-button:hover {
+            background: #40a9ff;
+        }
+        .send-button:disabled {
+            background: #f5f5f5;
+            color: #ccc;
+            cursor: not-allowed;
+        }
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            margin: 0 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .user-avatar {
+            background: #1890ff;
+            color: white;
+        }
+        .bot-avatar {
+            background: #52c41a;
+            color: white;
+        }
+        .loading {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #8c8c8c;
+        }
+        .status {
+            padding: 10px 20px;
+            background: #e6f7ff;
+            border-left: 4px solid #1890ff;
+            margin-bottom: 20px;
+        }
+        .error {
+            background: #fff2f0;
+            border-left: 4px solid #ff4d4f;
+        }
+        .success {
+            background: #f6ffed;
+            border-left: 4px solid #52c41a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 智能对话功能测试</h1>
+            <p>测试购物助手API连接和对话功能</p>
+        </div>
+
+        <div class="status" id="status">
+            正在检查API连接状态...
+        </div>
+
+        <div class="chat-container" id="chatContainer">
+            <div class="message bot-message">
+                <div class="avatar bot-avatar">🤖</div>
+                <div class="message-content">
+                    您好！我是智能购物助手。请问有什么可以帮助您的吗？
+                </div>
+            </div>
+        </div>
+
+        <div class="input-container">
+            <input
+                type="text"
+                class="input-field"
+                id="messageInput"
+                placeholder="请输入您的问题，比如：我想买一部手机..."
+                onkeypress="handleKeyPress(event)"
+            >
+            <button class="send-button" id="sendButton" onclick="sendMessage()">
+                发送
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8004';
+        let isLoading = false;
+
+        // 检查API状态
+        async function checkAPIStatus() {
+            const statusDiv = document.getElementById('status');
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`);
+                const data = await response.json();
+
+                if (data.status === 'healthy') {
+                    statusDiv.className = 'status success';
+                    statusDiv.innerHTML = '✅ API连接成功！智能对话功能已就绪。';
+                } else {
+                    throw new Error('API状态异常');
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.innerHTML = `❌ API连接失败: ${error.message}<br>请确保智能对话服务正在运行 (http://localhost:8003)`;
+                document.getElementById('sendButton').disabled = true;
+            }
+        }
+
+        // 发送消息
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message || isLoading) return;
+
+            const chatContainer = document.getElementById('chatContainer');
+            const sendButton = document.getElementById('sendButton');
+
+            // 添加用户消息
+            addMessage(message, 'user');
+            input.value = '';
+
+            // 显示加载状态
+            isLoading = true;
+            sendButton.disabled = true;
+            sendButton.textContent = '发送中...';
+
+            // 添加加载消息
+            const loadingId = addMessage('正在思考中...', 'bot', true);
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        user_id: 1,
+                        session_id: 'test_session'
+                    }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                // 移除加载消息
+                removeMessage(loadingId);
+
+                // 添加机器人回复
+                addMessage(data.response, 'bot');
+
+            } catch (error) {
+                // 移除加载消息
+                removeMessage(loadingId);
+
+                // 添加错误消息
+                addMessage(`抱歉，出现了错误：${error.message}`, 'bot');
+
+                console.error('发送消息失败:', error);
+            } finally {
+                isLoading = false;
+                sendButton.disabled = false;
+                sendButton.textContent = '发送';
+            }
+        }
+
+        // 添加消息到聊天容器
+        function addMessage(content, sender, isLoading = false) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageId = 'msg_' + Date.now();
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}-message`;
+            messageDiv.id = messageId;
+
+            const avatar = document.createElement('div');
+            avatar.className = `avatar ${sender}-avatar`;
+            avatar.textContent = sender === 'user' ? '👤' : '🤖';
+
+            const messageContent = document.createElement('div');
+            messageContent.className = 'message-content';
+
+            if (isLoading) {
+                messageContent.innerHTML = `
+                    <div class="loading">
+                        <div class="loading-spinner">⏳</div>
+                        <span>${content}</span>
+                    </div>
+                `;
+            } else {
+                messageContent.textContent = content;
+            }
+
+            if (sender === 'user') {
+                messageDiv.appendChild(messageContent);
+                messageDiv.appendChild(avatar);
+            } else {
+                messageDiv.appendChild(avatar);
+                messageDiv.appendChild(messageContent);
+            }
+
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            return messageId;
+        }
+
+        // 移除消息
+        function removeMessage(messageId) {
+            const message = document.getElementById(messageId);
+            if (message) {
+                message.remove();
+            }
+        }
+
+        // 处理回车键
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // 页面加载时检查API状态
+        window.onload = function() {
+            checkAPIStatus();
+            document.getElementById('messageInput').focus();
+        };
+    </script>
+</body>
+</html>

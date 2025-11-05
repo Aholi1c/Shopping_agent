@@ -1,8 +1,8 @@
 import axios from 'axios';
 import {
   Message, Conversation, ChatRequest, ChatResponse, MediaFile,
-  EnhancedChatRequest, EnhancedChatResponse, Memory, KnowledgeBase,
-  Agent, AgentTask, AgentCollaboration, RAGSearchResult
+  EnhancedChatRequest, KnowledgeBase,
+  Agent, AgentTask, AgentCollaboration
 } from '../types';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
@@ -209,12 +209,12 @@ export const ragAPI = {
   },
 
   // 上传文档到知识库
-  uploadDocument: async (kbId: number, file: File, options?: any) => {
+  uploadDocument: async (kbId: number, file: File, options?: Record<string, any>) => {
     const formData = new FormData();
     formData.append('file', file);
     if (options) {
       Object.entries(options).forEach(([key, value]) => {
-        formData.append(key, value.toString());
+        formData.append(key, String(value));
       });
     }
 
@@ -233,12 +233,12 @@ export const ragAPI = {
   },
 
   // 生成RAG响应
-  generateRAGResponse: async (query: string, options?: any) => {
+  generateRAGResponse: async (query: string, options?: Record<string, any>) => {
     const formData = new FormData();
     formData.append('query', query);
     if (options) {
       Object.entries(options).forEach(([key, value]) => {
-        formData.append(key, value.toString());
+        formData.append(key, String(value));
       });
     }
 

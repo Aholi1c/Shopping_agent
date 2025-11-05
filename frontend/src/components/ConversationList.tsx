@@ -149,8 +149,10 @@ export const ConversationList: React.FC<ConversationListProps> = ({
                     <div className="flex items-center mt-1 text-xs text-gray-500">
                       <span>{formatDateTime(conversation.updated_at)}</span>
                       {conversation.messages && conversation.messages.length > 0 && (
-                        <span className="mx-1">•</span>
-                        <span>{conversation.messages.length} messages</span>
+                        <>
+                          <span className="mx-1">•</span>
+                          <span>{conversation.messages.length} messages</span>
+                        </>
                       )}
                     </div>
                     {conversation.messages && conversation.messages.length > 0 && (
