@@ -2,10 +2,15 @@
 
 ## 后端服务启动
 
-### 方式一：使用启动脚本（推荐）
+### 方式一：使用Python启动脚本（推荐）
 
 ```bash
-cd /Users/xinyizhu/Downloads/claude-mirror/cc-mirror/llm-agent
+cd /path/to/llm-agent
+python3 start_agent.py
+```
+
+**或者使用bash脚本（仅限macOS/Linux）**：
+```bash
 chmod +x start_backend.sh
 ./start_backend.sh
 ```

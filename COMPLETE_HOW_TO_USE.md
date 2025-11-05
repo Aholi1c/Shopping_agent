@@ -228,15 +228,17 @@ python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 - **API文档**: http://localhost:8000/docs
 - **健康检查**: http://localhost:8000/health
 
-### 方式二：使用启动脚本
+### 方式二：使用Python启动脚本（推荐）
 
 ```bash
-# 使用提供的启动脚本
+# 直接运行Python启动脚本（跨平台支持）
+python3 start_agent.py
+```
+
+**或者使用bash脚本（仅限macOS/Linux）**：
+```bash
 chmod +x start_backend.sh
 ./start_backend.sh
-
-# 或使用Python脚本
-python3 start_agent.py
 ```
 
 ### 方式三：后台运行（生产环境）
