@@ -5,6 +5,7 @@ from ..models.schemas import ConversationCreate, MessageCreate, ChatRequest, Cha
 from ..services.llm_service import get_llm_service
 from ..services.memory_service import MemoryService
 from ..services.rag_service import RAGService, get_rag_service
+from ..core.config import settings
 from datetime import datetime
 import uuid
 import json
@@ -102,11 +103,17 @@ class ConversationService:
         message_history = [{"role": msg.role, "content": msg.content} for msg in messages]
 
         # 获取记忆上下文（如果启用记忆功能）
+        # 🔍 使用混合检索系统（向量搜索 + 关键词匹配）
         session_id = f"session_{chat_request.conversation_id}"
         memory_context = {}
         if chat_request.use_memory:
+            # 获取相关记忆上下文（使用混合检索 + 所有历史记忆）
+            # 系统会自动检测查询中的实体（品牌、价格、尺寸等），并智能调整搜索策略
             memory_context = await self.memory_service.get_relevant_context(
-                chat_request.message, session_id, user_id, chat_request.conversation_id
+                chat_request.message, 
+                session_id, 
+                user_id, 
+                chat_request.conversation_id
             )
         else:
             # 即使不使用记忆，也要初始化一个空的工作记忆，用于保持对话上下文
@@ -183,17 +190,36 @@ class ConversationService:
         ))
 
         # 存储到记忆系统（如果启用记忆功能）
+        recommended_products = None
         if chat_request.use_memory:
-            await self._store_conversation_in_memory(
+            # ⭐ 获取推荐的商品列表
+            recommended_products = await self._store_conversation_in_memory(
                 chat_request.message, response_content, chat_request.conversation_id, user_id, session_id
             )
 
         # 更新工作记忆（如果启用记忆功能）
         if chat_request.use_memory:
             from ..models.schemas import WorkingMemoryUpdate
+            
+            # ⭐ 构建 context_data，包含当前讨论的商品
+            context_data = {
+                "last_query": chat_request.message, 
+                "last_response": response_content
+            }
+            
+            # ⭐ 如果提取到了推荐的商品，将其添加到显式上下文中
+            if recommended_products and len(recommended_products) > 0:
+                context_data["current_products"] = recommended_products
+                print(f"\n{'='*80}")
+                print(f"💡 已将 {len(recommended_products)} 个推荐商品存入 WorkingMemory")
+                print(f"{'='*80}")
+                for i, product in enumerate(recommended_products, 1):
+                    print(f"  [{i}] {product.get('name', 'N/A')} - {product.get('brand', 'N/A')}")
+                print(f"{'='*80}\n")
+            
             working_memory_update = WorkingMemoryUpdate(
                 session_id=session_id,
-                context_data={"last_query": chat_request.message, "last_response": response_content},
+                context_data=context_data,
                 short_term_memory={"conversation_topic": conversation.title},
                 expires_in=3600  # 1小时
             )
@@ -253,6 +279,24 @@ Instructions:
 
 """
 
+        # ⭐ 添加当前讨论的商品上下文（显式状态，处理代词引用）
+        if memory_context.get("working_memory", {}).get("context_data", {}).get("current_products"):
+            current_products = memory_context["working_memory"]["context_data"]["current_products"]
+            system_prompt += f"""
+⭐ CURRENT CONTEXT - Products Being Discussed (当前正在讨论的商品):
+{'='*60}
+When the user says "that one", "it", "the previous one", "那个", "它", "之前的", they are referring to these products:
+
+"""
+            for i, product in enumerate(current_products, 1):
+                system_prompt += f"""
+[Product {i}]: {product.get('name', 'N/A')}
+  - Brand: {product.get('brand', 'N/A')}
+  - Key Features: {', '.join(product.get('key_features', []))}
+  - Price: {product.get('price_info', 'N/A')}
+"""
+            system_prompt += f"{'='*60}\n\n"
+
         # 添加知识库上下文
         if rag_context:
             system_prompt += "Knowledge Base Information (Shopping & Pricing Data):\n"
@@ -286,6 +330,25 @@ Instructions:
 
         system_prompt += "\nNow, respond to the user's message considering all the context above. If they ask about prices or product comparisons, use the knowledge base information to provide specific details."
 
+        # 打印发送给LLM的上下文
+        print(f"\n{'='*80}")
+        print(f"💬 构建发送给 LLM 的上下文")
+        print(f"{'='*80}")
+        if memory_context.get("relevant_memories"):
+            print(f"包含 {len(memory_context['relevant_memories'])} 条记忆")
+            print(f"  - 偏好记忆: {len(preference_memories)}")
+            print(f"  - 其他记忆: {len(other_memories)}")
+        if rag_context:
+            print(f"包含 {len(rag_context)} 条知识库信息")
+        # ⭐ 打印当前讨论的商品信息
+        if memory_context.get("working_memory", {}).get("context_data", {}).get("current_products"):
+            current_products = memory_context["working_memory"]["context_data"]["current_products"]
+            print(f"⭐ 包含 {len(current_products)} 个当前讨论的商品（用于代词引用）")
+            for i, product in enumerate(current_products[:3], 1):
+                print(f"  [{i}] {product.get('name', 'N/A')}")
+        print(f"\n系统提示长度: {len(system_prompt)} 字符")
+        print(f"{'='*80}\n")
+
         enhanced_history.append({"role": "system", "content": system_prompt})
 
         # 添加原始消息历史
@@ -309,34 +372,38 @@ Instructions:
             
             is_preference_related = any(keyword in user_message for keyword in preference_keywords)
             
-            # 存储用户消息
+            # 存储用户消息（如果包含偏好信息，提高重要性）
             user_memory = MemoryCreate(
                 content=user_message,
                 memory_type="semantic" if is_preference_related else "episodic",
-                importance_score=0.8 if is_preference_related else 0.6,
+                importance_score=0.9 if is_preference_related else 0.6,  # 提高偏好相关消息的重要性
                 user_id=user_id,
                 metadata={
                     "source": "user_input", 
                     "conversation_id": conversation_id,
                     "is_preference": is_preference_related
                 },
-                tags=["preference"] if is_preference_related else []
+                tags=["preference", "user_preference"] if is_preference_related else []
             )
             await self.memory_service.create_memory(user_memory)
 
-            # 存储助手回复
-            assistant_memory = MemoryCreate(
-                content=assistant_response,
-                memory_type="episodic",
-                importance_score=0.8,
-                user_id=user_id,
-                metadata={"source": "assistant_response", "conversation_id": conversation_id}
+            # 智能提取助手推荐的商品（仅当真正推荐了商品时才保存）
+            # ⭐ 获取推荐的商品列表，用于更新 WorkingMemory
+            recommended_products = await self._extract_and_store_recommendations(
+                assistant_response, 
+                conversation_id, 
+                user_id
             )
-            await self.memory_service.create_memory(assistant_memory)
             
             # 如果包含偏好信息，创建一个专门的偏好记忆
             if is_preference_related:
                 try:
+                    print(f"\n{'='*80}")
+                    print(f"🎯 检测到偏好相关信息，开始提取...")
+                    print(f"{'='*80}")
+                    print(f"用户消息: {user_message}")
+                    print(f"{'-'*80}")
+                    
                     # 使用LLM提取偏好信息
                     llm_service = get_llm_service()
                     if llm_service:
@@ -367,6 +434,8 @@ Instructions:
                             {"role": "user", "content": preference_prompt}
                         ], max_tokens=500, temperature=0.3)
                         
+                        print(f"LLM 返回: {llm_response.get('content', '')[:200]}...")
+                        
                         # 尝试解析偏好信息
                         import json
                         import re
@@ -376,6 +445,13 @@ Instructions:
                         if json_match:
                             preference_data = json.loads(json_match.group())
                             preference_summary = json.dumps(preference_data, ensure_ascii=False)
+                            
+                            print(f"\n✅ 成功提取偏好信息:")
+                            print(f"   品牌: {preference_data.get('preferences', {}).get('brands', [])}")
+                            print(f"   价格区间: {preference_data.get('preferences', {}).get('price_range', {})}")
+                            print(f"   特性: {preference_data.get('preferences', {}).get('features', [])}")
+                            print(f"   其他: {preference_data.get('preferences', {}).get('other', 'N/A')}")
+                            print(f"{'='*80}\n")
                             
                             # 创建偏好记忆
                             preference_memory = MemoryCreate(
@@ -391,12 +467,156 @@ Instructions:
                                 tags=["preference", "user_preference", "shopping_preference"]
                             )
                             await self.memory_service.create_memory(preference_memory)
+                        else:
+                            print(f"⚠️  无法从LLM响应中提取JSON")
+                            print(f"{'='*80}\n")
                 except Exception as e:
-                    print(f"Error extracting preference: {e}")
+                    print(f"\n❌ 偏好提取错误: {e}")
+                    print(f"{'='*80}\n")
                     # 即使提取失败，也继续存储对话记忆
+            
+            # ⭐ 返回推荐的商品列表（用于更新 WorkingMemory）
+            return recommended_products
 
         except Exception as e:
             print(f"Error storing conversation in memory: {e}")
+            return None
+
+    async def _extract_and_store_recommendations(self, assistant_response: str, conversation_id: int, user_id: Optional[int]):
+        """
+        从AI回复中智能提取推荐的商品信息（仅保存核心信息，避免冗余）
+        只在真正推荐了商品时才保存记忆
+        """
+        try:
+            # 检测是否包含推荐相关的关键词
+            recommendation_keywords = [
+                "推荐", "建议", "可以看看", "可以考虑", "为您找到", "为您推荐",
+                "这款", "那款", "以下", "下面是", "介绍", "这个产品"
+            ]
+            
+            has_recommendation = any(keyword in assistant_response for keyword in recommendation_keywords)
+            
+            # 如果没有推荐内容，就不保存
+            if not has_recommendation:
+                print(f"\n💭 AI回复不包含商品推荐，跳过记忆存储")
+                return
+            
+            print(f"\n{'='*80}")
+            print(f"🛍️  检测到AI推荐，开始提取商品信息...")
+            print(f"{'='*80}")
+            print(f"AI回复（前150字）: {assistant_response[:150]}...")
+            print(f"{'-'*80}")
+            
+            # 使用LLM提取推荐的商品信息
+            llm_service = get_llm_service()
+            if not llm_service:
+                print(f"⚠️  LLM服务不可用，跳过推荐提取")
+                return
+            
+            extraction_prompt = f"""
+从以下AI助手的回复中提取推荐的商品信息。只提取核心信息，避免冗余描述。
+
+AI回复：{assistant_response}
+
+请以JSON格式返回提取的信息：
+{{
+    "has_recommendation": true/false,  // 是否真的推荐了具体商品
+    "products": [
+        {{
+            "name": "商品名称（简短，例如：阿迪达斯UltraBoost白色）",
+            "brand": "品牌",
+            "key_features": ["关键特点1", "关键特点2"],  // 最多3个
+            "price_info": "价格信息（如有）"
+        }}
+    ],
+    "recommendation_reason": "推荐理由的简要总结（一句话）"
+}}
+
+要求：
+1. 如果没有推荐具体商品（只是一般性对话），设置has_recommendation为false
+2. 商品名称要简洁明了，不要长句子
+3. 只提取关键特点，不要冗长描述
+4. 只返回JSON，不要其他文字
+
+只返回JSON，不要任何额外文字。
+"""
+            
+            llm_response = await llm_service.chat_completion([
+                {"role": "system", "content": "你是商品推荐信息提取专家。只提取核心信息，保持简洁。"},
+                {"role": "user", "content": extraction_prompt}
+            ], max_tokens=500, temperature=0.3)
+            
+            response_text = llm_response.get("content", "")
+            print(f"LLM提取结果: {response_text[:200]}...")
+            
+            # 提取JSON部分
+            import json
+            import re
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
+            
+            if json_match:
+                recommendation_data = json.loads(json_match.group())
+                
+                # 检查是否真的有推荐
+                if not recommendation_data.get("has_recommendation", False):
+                    print(f"✓ 确认无具体商品推荐，跳过保存")
+                    print(f"{'='*80}\n")
+                    return
+                
+                products = recommendation_data.get("products", [])
+                if not products:
+                    print(f"✓ 未提取到商品信息，跳过保存")
+                    print(f"{'='*80}\n")
+                    return
+                
+                # 构建简洁的记忆内容
+                product_names = [p.get("name", "") for p in products]
+                recommendation_summary = f"已推荐商品: {', '.join(product_names)}"
+                
+                if recommendation_data.get("recommendation_reason"):
+                    recommendation_summary += f" | 原因: {recommendation_data['recommendation_reason']}"
+                
+                print(f"\n✅ 成功提取推荐信息:")
+                print(f"   推荐商品: {product_names}")
+                print(f"   原因: {recommendation_data.get('recommendation_reason', 'N/A')}")
+                for i, product in enumerate(products[:3], 1):  # 最多显示3个
+                    print(f"   [{i}] {product.get('name')} - {product.get('brand', 'N/A')}")
+                    if product.get('key_features'):
+                        print(f"       特点: {', '.join(product['key_features'][:3])}")
+                print(f"{'='*80}\n")
+                
+                # 创建简洁的推荐记忆（重要性较低，避免干扰用户偏好）
+                recommendation_memory = MemoryCreate(
+                    content=recommendation_summary,
+                    memory_type="episodic",
+                    importance_score=0.4,  # 较低的重要性，避免干扰用户偏好搜索
+                    user_id=user_id,
+                    metadata={
+                        "source": "ai_recommendation",
+                        "conversation_id": conversation_id,
+                        "products": products,
+                        "recommendation_data": recommendation_data
+                    },
+                    tags=["recommendation", "ai_suggestion"] + [p.get("brand", "") for p in products if p.get("brand")]
+                )
+                await self.memory_service.create_memory(recommendation_memory)
+                
+                print(f"✅ 推荐记忆已保存 (简洁模式)\n")
+                
+                # ⭐ 将推荐的商品存储到 WorkingMemory 中（显式上下文状态）
+                return products  # 返回商品列表，用于更新 WorkingMemory
+            else:
+                print(f"⚠️  无法从LLM响应中提取JSON，跳过保存")
+                print(f"{'='*80}\n")
+                
+        except Exception as e:
+            print(f"\n❌ 推荐提取错误: {e}")
+            import traceback
+            traceback.print_exc()
+            print(f"{'='*80}\n")
+            # 提取失败不影响主流程
+        
+        return None  # 如果没有提取到商品，返回 None
 
     def _is_shopping_related_query(self, query: str) -> bool:
         """

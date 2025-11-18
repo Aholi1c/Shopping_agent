@@ -200,7 +200,7 @@ class VectorService:
                             "importance_score": memory.importance_score,
                             "score": float(distance),
                             "created_at": memory.created_at.isoformat(),
-                            "metadata": memory.metadata
+                            "metadata": memory.meta_data or {}
                         })
 
             return sorted(results, key=lambda x: x["score"], reverse=True)
@@ -246,7 +246,7 @@ class VectorService:
                             "document_id": chunk.document_id,
                             "chunk_index": chunk.chunk_index,
                             "score": float(distance),
-                            "metadata": chunk.metadata,
+                            "metadata": chunk.meta_data or {},
                             "document_name": chunk.document.original_name
                         })
 

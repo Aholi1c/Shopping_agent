@@ -128,6 +128,7 @@ class Document(Base):
     file_type = Column(String)
     content = Column(Text, nullable=True)
     chunk_count = Column(Integer, default=0)
+    meta_data = Column(JSON, nullable=True)  # 额外的元数据
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
