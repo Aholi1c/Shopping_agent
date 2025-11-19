@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "智能购物助手 LLM Agent",
+  "name": "Smart Shopping Assistant LLM Agent",
   "version": "2.1.0",
-  "description": "在购物网站上提供智能购物助手功能，支持价格对比、商品分析、智能推荐等",
+  "description": "Provides intelligent shopping assistant features on shopping websites, supporting price comparison, product analysis, smart recommendations, and more",
   "permissions": [
     "storage",
     "activeTab",
