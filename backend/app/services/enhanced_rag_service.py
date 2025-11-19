@@ -574,7 +574,7 @@ class EnhancedRAGService(RAGService):
         for item in data:
             # 检查是否已存在（通过哈希）
             existing_doc = self.db.query(Document).filter(
-                Document.metadata.contains({"hash": item["hash"]})
+                Document.meta_data.contains({"hash": item["hash"]})
             ).first()
 
             if existing_doc:
@@ -589,7 +589,7 @@ class EnhancedRAGService(RAGService):
                 file_type="txt",
                 content=item["content"],
                 chunk_count=0,
-                metadata={
+                meta_data={
                     "source": source_name,
                     "hash": item["hash"],
                     **item.get("metadata", {})
