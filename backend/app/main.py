@@ -65,11 +65,11 @@ async def root():
     """
     html_content = """
     <!DOCTYPE html>
-    <html lang="zh-CN">
+    <html lang="en">
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>多模态LLM Agent API</title>
+        <title>Multimodal LLM Agent API</title>
         <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body {
@@ -153,22 +153,22 @@ async def root():
     </head>
     <body>
         <div class="container">
-            <span class="status">● 服务运行中</span>
+            <span class="status">● Service Running</span>
             <h1>🚀 LLM Agent API</h1>
-            <div class="version">版本 2.1.0</div>
+            <div class="version">Version 2.1.0</div>
             <p class="description">
-                具备记忆系统、RAG增强和多Agent协作的智能AI助手API<br>
-                支持多模态交互、购物助手、价格跟踪等功能
+                Intelligent AI Assistant API with Memory System, RAG Enhancement, and Multi-Agent Collaboration<br>
+                Supports multimodal interaction, shopping assistant, price tracking and more
             </p>
             <div class="links">
-                <a href="/docs" class="link">📖 查看API文档 (Swagger UI)</a>
-                <a href="/redoc" class="link secondary">📚 查看API文档 (ReDoc)</a>
-                <a href="/health" class="link secondary">🏥 健康检查</a>
+                <a href="/docs" class="link">📖 View API Documentation (Swagger UI)</a>
+                <a href="/redoc" class="link secondary">📚 View API Documentation (ReDoc)</a>
+                <a href="/health" class="link secondary">🏥 Health Check</a>
             </div>
             <div class="info">
-                <strong>快速开始：</strong><br>
-                • API文档: <a href="/docs" style="color: #667eea;">/docs</a><br>
-                • 健康检查: <a href="/health" style="color: #667eea;">/health</a><br>
+                <strong>Quick Start:</strong><br>
+                • API Documentation: <a href="/docs" style="color: #667eea;">/docs</a><br>
+                • Health Check: <a href="/health" style="color: #667eea;">/health</a><br>
                 • WebSocket: /ws/{client_id}
             </div>
         </div>
