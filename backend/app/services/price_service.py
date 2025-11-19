@@ -184,7 +184,7 @@ class PriceService:
                             "total_products": len(products),
                             "search_time": 0,
                             "data_source": "database",
-                            "message": f"从数据库找到 {len(products)} 个商品，{len(analysis)} 个商品组"
+                            "message": f"Found {len(products)} products from database, {len(analysis)} product groups"
                         }
                     else:
                         # 如果分组后没有结果，直接返回所有商品（不分组）
@@ -214,7 +214,7 @@ class PriceService:
                             "total_products": len(products),
                             "search_time": 0,
                             "data_source": "database",
-                            "message": f"从数据库找到 {len(products)} 个商品"
+                            "message": f"Found {len(products)} products from database"
                         }
         except Exception as e:
             logger.warning(f"数据库价格对比失败: {e}")
@@ -225,18 +225,18 @@ class PriceService:
                 "total_products": 0,
                 "search_time": 0,
                 "data_source": "database",
-                "message": "数据库查询失败，请确保已上传商品数据到数据库。价格对比功能仅使用数据库中的数据，不调用外部API。"
+                "message": "Database query failed. Please ensure product data has been uploaded to the database. Price comparison only uses database data and does not call external APIs."
             }
 
         # 如果数据库没有结果，直接返回空结果，不再调用API
-        logger.info("数据库中未找到匹配的商品，价格对比功能仅使用数据库数据")
+        logger.info("No matching products found in database. Price comparison only uses database data")
         return {
             "query": query,
             "comparison": {},
             "total_products": 0,
             "search_time": 0,
             "data_source": "database",
-            "message": "未找到匹配的商品。价格对比功能仅使用数据库中的数据（来自products_data.json），请确保已上传商品数据到数据库。如果需要添加新商品，请使用商品管理API上传数据。"
+            "message": "No matching products found. Price comparison only uses database data (from products_data.json). Please ensure product data has been uploaded to the database. To add new products, use the product management API to upload data."
         }
 
     async def track_price_changes(self, product_id: int, days: int = 30) -> Dict:
