@@ -30,6 +30,7 @@ from ..services.memory_service import MemoryService
 from ..services.media_service import MediaService
 from ..services.scenario_service import scenario_service
 from ..services.reinforcement_learning_service import rl_service
+from ..services.rag_service import get_rag_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()

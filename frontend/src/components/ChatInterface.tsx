@@ -33,6 +33,7 @@ import {
 import { Message, Conversation, ChatRequest, FeatureToggle } from '../types';
 import { chatAPI } from '../services/api';
 import { FeaturePanel } from './FeaturePanel';
+import { streamChat, createAbortController } from '../services/streaming';
 
 const { TextArea } = Input;
 const { Text, Paragraph } = Typography;
@@ -62,10 +63,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   });
   const [showFeaturePanel, setShowFeaturePanel] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
-
+  const streamAbortRef = useRef<AbortController | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [isStreaming, setIsStreaming] = useState(false);
 
   useEffect(() => {
     if (conversationId) {
@@ -119,48 +122,129 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setIsLoading(true);
     setIsTyping(true);
 
-    // Simulate typing delay for better UX
-    setTimeout(() => {
-      setIsTyping(false);
-    }, 1000);
+    // 模拟打字条，提升UX
+    setTimeout(() => setIsTyping(false), 800);
 
     try {
-      let response;
+      // 如果是图片/音频上传，走非流模式
       if (selectedFile) {
+        let response;
         const formData = new FormData();
         formData.append('message', request.message);
-        if (request.conversation_id) {
-          formData.append('conversation_id', request.conversation_id.toString());
-        }
-        if (request.model) {
-          formData.append('model', request.model);
-        }
+        if (request.conversation_id) formData.append('conversation_id', request.conversation_id.toString());
+        if (request.model) formData.append('model', request.model);
         formData.append('file', selectedFile);
-
         response = await chatAPI.sendMessageWithFile(formData);
+
+        const assistantMessage: Message = {
+          id: response.message_id,
+          conversation_id: response.conversation_id,
+          role: 'assistant',
+          content: response.response,
+          message_type: 'text',
+          created_at: new Date().toISOString(),
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+
+        if (onConversationChange) {
+          const conversation = await chatAPI.getConversation(response.conversation_id);
+          onConversationChange(conversation);
+        }
       } else {
-        response = await chatAPI.sendMessage(request);
-      }
+        // 文本消息：统一走流式
+        const tempId = Date.now() + 1;
+        const initialConvId = conversationId || 0;
+        setMessages(prev => [
+          ...prev,
+          {
+            id: tempId,
+            conversation_id: initialConvId,
+            role: 'assistant',
+            content: '',
+            message_type: 'text',
+            created_at: new Date().toISOString(),
+          },
+        ]);
 
-      const assistantMessage: Message = {
-        id: response.message_id,
-        conversation_id: response.conversation_id,
-        role: 'assistant',
-        content: response.response,
-        message_type: 'text',
-        created_at: new Date().toISOString(),
-      };
-      setMessages(prev => [...prev, assistantMessage]);
+        const controller = createAbortController();
+        streamAbortRef.current = controller;
+        setIsStreaming(true);
 
-      if (onConversationChange) {
-        const conversation = await chatAPI.getConversation(response.conversation_id);
-        onConversationChange(conversation);
+        await streamChat(
+          {
+            message: request.message,
+            conversation_id: conversationId, // 可为空，后端会新建并通过 meta 告知
+            message_type: 'text',
+            model: request.model,
+            max_tokens: request.max_tokens,
+            temperature: request.temperature,
+            use_memory: true,
+            use_rag: false,
+          },
+          {
+            signal: controller.signal,
+            onMeta: async (meta) => {
+              const metaConvId = meta?.conversation_id;
+              if (metaConvId) {
+                // 将占位消息的 conversation_id 更新为真实ID
+                setMessages(prev => prev.map(m => (
+                  m.id === tempId ? { ...m, conversation_id: metaConvId } : m
+                )));
+                // 通知上层刷新对话（可选）
+                if (onConversationChange) {
+                  try {
+                    const conversation = await chatAPI.getConversation(metaConvId);
+                    onConversationChange(conversation);
+                  } catch { /* ignore */ }
+                }
+              }
+            },
+            onDelta: (delta) => {
+              setMessages(prev => prev.map(m => (
+                m.id === tempId
+                  ? { ...m, content: (m.content || '') + delta }
+                  : m
+              )));
+              // 自动滚动
+              scrollToBottom();
+            },
+            onDone: async (payload) => {
+              setIsLoading(false);
+              setIsStreaming(false);
+              streamAbortRef.current = null;
+              const doneConvId = payload?.conversation_id || conversationId;
+              if (doneConvId && onConversationChange) {
+                try {
+                  const conversation = await chatAPI.getConversation(doneConvId);
+                  onConversationChange(conversation);
+                } catch { /* ignore */ }
+              }
+            },
+            onError: (err) => {
+              setIsLoading(false);
+              setIsStreaming(false);
+              streamAbortRef.current = null;
+              message.error(`流式对话出错: ${err?.message || err}`);
+            },
+          }
+        );
       }
     } catch (error) {
       console.error('Failed to send message:', error);
       message.error('发送消息失败，请重试');
     } finally {
       setIsLoading(false);
+      setIsTyping(false);
+    }
+  };
+
+  const handleCancelStream = () => {
+    if (streamAbortRef.current) {
+      streamAbortRef.current.abort();
+      streamAbortRef.current = null;
+      setIsStreaming(false);
+      setIsLoading(false);
+      message.info('已停止生成');
     }
   };
 
@@ -541,20 +625,35 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
               />
             </Tooltip>
 
-            <Button
-              type="primary"
-              icon={<SendOutlined />}
-              onClick={handleSendMessage}
-              disabled={isLoading || (!inputMessage.trim() && !selectedFile)}
-              style={{
-                borderRadius: '8px',
-                height: '44px',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                border: 'none'
-              }}
-            >
-              发送
-            </Button>
+            {isStreaming ? (
+              <Button
+                danger
+                icon={<StopOutlined />}
+                onClick={handleCancelStream}
+                style={{
+                  borderRadius: '8px',
+                  height: '44px',
+                  border: '1px solid #ef4444',
+                }}
+              >
+                停止
+              </Button>
+            ) : (
+              <Button
+                type="primary"
+                icon={<SendOutlined />}
+                onClick={handleSendMessage}
+                disabled={isLoading || (!inputMessage.trim() && !selectedFile)}
+                style={{
+                  borderRadius: '8px',
+                  height: '44px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  border: 'none'
+                }}
+              >
+                发送
+              </Button>
+            )}
           </div>
         </div>
 
@@ -585,3 +684,4 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     </div>
   );
 };
+

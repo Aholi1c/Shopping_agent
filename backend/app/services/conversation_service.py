@@ -1,27 +1,47 @@
+# -*- coding: utf-8 -*-
+import time
+import logging
+from typing import List, Dict, Any, Optional
+
 from sqlalchemy.orm import Session
-from typing import List, Optional, Dict, Any
-from ..models.models import Conversation, Message, User
-from ..models.schemas import ConversationCreate, MessageCreate, ChatRequest, ChatResponse, MemoryCreate, RAGSearchRequest
+
+from ..core.config import settings  # 新增: 允许后续根据配置扩展逻辑
+from ..models.models import Conversation, Message
+from ..models.schemas import (
+    ChatRequest,
+    ChatResponse,
+    ConversationCreate,
+    MemoryCreate,
+    MessageCreate,
+    RAGSearchRequest,
+    ProductSearchRequest,
+    PlatformType,
+    UserRole,
+    MessageType,
+)
 from ..services.llm_service import get_llm_service
 from ..services.memory_service import MemoryService
-from ..services.rag_service import RAGService, get_rag_service
-from datetime import datetime
-import uuid
-import json
+from ..services.rag_service import get_rag_service
+from ..services.shopping_service import ShoppingService
+from ..services.media_service import MediaService
+
+logger = logging.getLogger("uvicorn.error")
+
 
 class ConversationService:
     def __init__(self, db: Session):
         self.db = db
+        self.llm_service = get_llm_service()
         self.memory_service = MemoryService(db)
         self.rag_service = get_rag_service(db)
 
-    def create_conversation(self, conversation_data: ConversationCreate, user_id: Optional[int] = None) -> Conversation:
-        """
-        创建新对话
-        """
+    # ------------------------------
+    # CRUD helpers for conversations/messages
+    # ------------------------------
+    def create_conversation(self, data: ConversationCreate, user_id: Optional[int] = None) -> Conversation:
         conversation = Conversation(
-            title=conversation_data.title,
-            user_id=user_id
+            title=data.title or "New Conversation",
+            user_id=data.user_id if data.user_id is not None else user_id,
         )
         self.db.add(conversation)
         self.db.commit()
@@ -29,388 +49,313 @@ class ConversationService:
         return conversation
 
     def get_conversation(self, conversation_id: int) -> Optional[Conversation]:
-        """
-        获取对话详情
-        """
         return self.db.query(Conversation).filter(Conversation.id == conversation_id).first()
 
     def get_user_conversations(self, user_id: Optional[int] = None, limit: int = 50) -> List[Conversation]:
-        """
-        获取用户的对话列表
-        """
-        query = self.db.query(Conversation)
+        q = self.db.query(Conversation).order_by(Conversation.updated_at.desc())
         if user_id:
-            query = query.filter(Conversation.user_id == user_id)
-        return query.order_by(Conversation.updated_at.desc()).limit(limit).all()
+            q = q.filter(Conversation.user_id == user_id)
+        return q.limit(limit).all()
 
-    def add_message(self, message_data: MessageCreate) -> Message:
-        """
-        添加消息到对话
-        """
-        message = Message(
-            conversation_id=message_data.conversation_id,
-            role=message_data.role,
-            content=message_data.content,
-            message_type=message_data.message_type,
-            media_url=message_data.media_url
-        )
-        self.db.add(message)
+    def delete_conversation(self, conversation_id: int) -> bool:
+        conv = self.get_conversation(conversation_id)
+        if not conv:
+            return False
+        # delete messages first
+        self.db.query(Message).filter(Message.conversation_id == conversation_id).delete()
+        self.db.delete(conv)
         self.db.commit()
-        self.db.refresh(message)
+        return True
 
-        # 更新对话的更新时间
-        conversation = self.get_conversation(message_data.conversation_id)
-        if conversation:
-            conversation.updated_at = datetime.utcnow()
-            self.db.commit()
-
-        return message
+    def add_message(self, data: MessageCreate) -> Message:
+        msg = Message(
+            conversation_id=data.conversation_id,
+            role=(data.role.value if hasattr(data.role, "value") else str(data.role)),
+            content=data.content,
+            message_type=(data.message_type.value if hasattr(data.message_type, "value") else (data.message_type or "text")),
+            media_url=data.media_url,
+        )
+        self.db.add(msg)
+        # touch conversation updated_at
+        conv = self.db.query(Conversation).filter(Conversation.id == data.conversation_id).first()
+        if conv:
+            # SQLAlchemy onupdate should handle, but force update
+            conv.updated_at = conv.updated_at
+        self.db.commit()
+        self.db.refresh(msg)
+        return msg
 
     def get_conversation_messages(self, conversation_id: int) -> List[Message]:
-        """
-        获取对话的所有消息
-        """
-        return self.db.query(Message).filter(Message.conversation_id == conversation_id).order_by(Message.created_at.asc()).all()
+        return (
+            self.db.query(Message)
+            .filter(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.asc())
+            .all()
+        )
 
+    # ------------------------------
+    # Core chat processing
+    # ------------------------------
     async def process_chat_message(self, chat_request: ChatRequest, user_id: Optional[int] = None) -> ChatResponse:
-        """
-        处理聊天消息并返回AI回复，集成记忆功能
-        """
-        # 创建或获取对话
+        start = time.perf_counter()
+
+        # 1) Ensure conversation
         if not chat_request.conversation_id:
-            conversation = self.create_conversation(
-                ConversationCreate(title=chat_request.message[:50] + "..."),
-                user_id
-            )
-            chat_request.conversation_id = conversation.id
+            conv = self.create_conversation(ConversationCreate(title=chat_request.message[:50] + "..."), user_id=user_id)
+            chat_request.conversation_id = conv.id
         else:
-            conversation = self.get_conversation(chat_request.conversation_id)
-            if not conversation:
-                raise ValueError("Conversation not found")
+            conv = self.get_conversation(chat_request.conversation_id)
+            if not conv:
+                conv = self.create_conversation(ConversationCreate(title=chat_request.message[:50] + "..."), user_id=user_id)
+                chat_request.conversation_id = conv.id
 
-        # 添加用户消息
-        user_message = self.add_message(MessageCreate(
-            conversation_id=chat_request.conversation_id,
-            role="user",
-            content=chat_request.message,
-            message_type=chat_request.message_type,
-            media_url=chat_request.media_url
-        ))
+        # 2) Persist user message
+        self.add_message(
+            MessageCreate(
+                conversation_id=chat_request.conversation_id,
+                role=UserRole.USER,
+                content=chat_request.message,
+                message_type=chat_request.message_type,
+                media_url=chat_request.media_url,
+            )
+        )
 
-        # 构建消息历史
+        # 3) Build history
         messages = self.get_conversation_messages(chat_request.conversation_id)
-        message_history = [{"role": msg.role, "content": msg.content} for msg in messages]
+        message_history = [{"role": m.role, "content": m.content} for m in messages]
 
-        # 获取记忆上下文（如果启用记忆功能）
+        # 4) Memory context
         session_id = f"session_{chat_request.conversation_id}"
-        memory_context = {}
         if chat_request.use_memory:
-            memory_context = await self.memory_service.get_relevant_context(
-                chat_request.message, session_id, user_id, chat_request.conversation_id
-            )
+            try:
+                memory_context = await self.memory_service.get_relevant_context(
+                    chat_request.message, session_id, user_id, chat_request.conversation_id
+                )
+            except Exception as e:
+                logger.exception("chat.memory error: %s", e)
+                memory_context = {
+                    "relevant_memories": [],
+                    "working_memory": {},
+                    "session_context": {"session_id": session_id},
+                }
         else:
-            # 即使不使用记忆，也要初始化一个空的工作记忆，用于保持对话上下文
             memory_context = {
                 "relevant_memories": [],
                 "working_memory": {},
-                "session_context": {
-                    "session_id": session_id,
-                    "timestamp": datetime.utcnow().isoformat()
-                }
+                "session_context": {"session_id": session_id},
             }
 
-        # 获取RAG上下文（自动检测购物相关查询）
-        rag_context = []
-        if self._is_shopping_related_query(chat_request.message):
+        # 5) RAG context (shopping queries)
+        rag_context: List[Any] = []
+        rag_start = time.perf_counter()
+        is_shopping_query = self._is_shopping_related_query(chat_request.message)
+        if is_shopping_query:
             try:
                 rag_search = RAGSearchRequest(
                     query=chat_request.message,
-                    knowledge_base_ids=[1],  # 使用购物知识库
+                    knowledge_base_ids=[],
                     limit=5,
-                    threshold=0.6
+                    threshold=0.6,
                 )
                 rag_results = await self.rag_service.search_knowledge_base(rag_search)
                 if rag_results:
                     rag_context = rag_results
             except Exception as e:
-                print(f"RAG search error: {e}")
+                logger.exception("chat.rag error: %s", e)
+        rag_ms = (time.perf_counter() - rag_start) * 1000
+        logger.info("chat.rag duration_ms=%.1f used=%s conv_id=%s", rag_ms, bool(rag_context), chat_request.conversation_id)
 
-        # 构建包含记忆和RAG的增强消息历史
-        enhanced_message_history = self._build_enhanced_message_history(message_history, memory_context, rag_context)
+        # 6) Real-time Taobao products (via Onebound)
+        products_context: List[Dict[str, Any]] = []
+        if is_shopping_query:
+            try:
+                shopping_llm = get_llm_service()
+                shopping_service = ShoppingService(
+                    self.db,
+                    shopping_llm,
+                    self.memory_service,
+                    MediaService(),
+                )
+                product_search = ProductSearchRequest(
+                    query=chat_request.message,
+                    platforms=[PlatformType.TAOBAO],
+                    category=None,
+                    price_min=None,
+                    price_max=None,
+                    sort_by="relevance",
+                    page=1,
+                    page_size=10,
+                )
+                search_result = await shopping_service.search_products(product_search, user_id=user_id)
+                raw_products = search_result.get("products", [])
+                for p in raw_products[:5]:
+                    if hasattr(p, "dict"):
+                        data = p.dict()
+                    elif isinstance(p, dict):
+                        data = p
+                    else:
+                        data = getattr(p, "__dict__", {}) or {}
+                    products_context.append(
+                        {
+                            "title": data.get("title"),
+                            "price": data.get("price"),
+                            "original_price": data.get("original_price"),
+                            "discount_rate": data.get("discount_rate"),
+                            "rating": data.get("rating"),
+                            "review_count": data.get("review_count"),
+                            "sales_count": data.get("sales_count"),
+                            "product_url": data.get("product_url"),
+                        }
+                    )
+            except Exception as e:
+                logger.exception("chat.shopping_products error: %s", e)
 
-        # 处理多模态消息
-        llm_service = get_llm_service()
-        if llm_service is None:
-            raise Exception("LLM服务未初始化，请检查API密钥配置")
-        
-        if chat_request.message_type == "image" and chat_request.media_url:
-            # 图像分析
-            analysis_result = await llm_service.analyze_image(
-                chat_request.media_url,
-                "Analyze this image and respond to the user's question: " + chat_request.message
-            )
-            response_content = analysis_result["analysis"]
-        elif chat_request.message_type == "audio" and chat_request.media_url:
-            # 音频转录
-            transcription_result = await llm_service.transcribe_audio(chat_request.media_url)
-            response_content = f"Transcribed: {transcription_result['text']}"
-        else:
-            # 文本对话（使用增强的上下文）
-            llm_service = get_llm_service()
-            if llm_service is None:
-                raise Exception("LLM服务未初始化，请检查API密钥配置")
-            
-            # 如果模型名称是OpenAI格式，但配置的是BigModel，使用默认模型
-            model = chat_request.model
-            if model.startswith("gpt-") and settings.llm_provider == "bigmodel":
-                # 使用配置的默认模型
-                model = settings.text_model or "glm-4-0520"
-            
-            llm_response = await llm_service.chat_completion(
-                messages=enhanced_message_history,
-                model=model,
-                max_tokens=chat_request.max_tokens,
-                temperature=chat_request.temperature
-            )
-            response_content = llm_response["content"]
-
-        # 添加AI回复消息
-        ai_message = self.add_message(MessageCreate(
-            conversation_id=chat_request.conversation_id,
-            role="assistant",
-            content=response_content,
-            message_type="text"
-        ))
-
-        # 存储到记忆系统（如果启用记忆功能）
-        if chat_request.use_memory:
-            await self._store_conversation_in_memory(
-                chat_request.message, response_content, chat_request.conversation_id, user_id, session_id
-            )
-
-        # 更新工作记忆（如果启用记忆功能）
-        if chat_request.use_memory:
-            from ..models.schemas import WorkingMemoryUpdate
-            working_memory_update = WorkingMemoryUpdate(
-                session_id=session_id,
-                context_data={"last_query": chat_request.message, "last_response": response_content},
-                short_term_memory={"conversation_topic": conversation.title},
-                expires_in=3600  # 1小时
-            )
-            await self.memory_service.update_working_memory(working_memory_update)
-
-        return ChatResponse(
-            response=response_content,
-            conversation_id=chat_request.conversation_id,
-            message_id=ai_message.id,
-            model_used=chat_request.model,
-            tokens_used=llm_response.get("tokens_used") if "tokens_used" in llm_response else None
+        # 7) Build enhanced history
+        enhanced_message_history = self._build_enhanced_message_history(
+            message_history, memory_context, rag_context, products_context
         )
 
-    def delete_conversation(self, conversation_id: int) -> bool:
-        """
-        删除对话
-        """
-        conversation = self.get_conversation(conversation_id)
-        if conversation:
-            # 删除相关消息
-            self.db.query(Message).filter(Message.conversation_id == conversation_id).delete()
-            self.db.delete(conversation)
-            self.db.commit()
-            return True
-        return False
+        # 8) Call LLM
+        model = chat_request.model
+        # Allow BigModel fallback naming
+        if model.startswith("gpt-"):
+            # let LLM service map when provider is bigmodel
+            pass
+        llm_start = time.perf_counter()
+        result = await self.llm_service.chat_completion(
+            messages=enhanced_message_history,
+            model=model,
+            max_tokens=chat_request.max_tokens,
+            temperature=chat_request.temperature,
+            stream=False,
+        )
+        llm_ms = (time.perf_counter() - llm_start) * 1000
 
-    def update_conversation_title(self, conversation_id: int, title: str) -> Optional[Conversation]:
-        """
-        更新对话标题
-        """
-        conversation = self.get_conversation(conversation_id)
-        if conversation:
-            conversation.title = title
-            conversation.updated_at = datetime.utcnow()
-            self.db.commit()
-            self.db.refresh(conversation)
-        return conversation
+        assistant_text = result.get("content", "")
+        # 9) Persist assistant message
+        assistant = self.add_message(
+            MessageCreate(
+                conversation_id=chat_request.conversation_id,
+                role=UserRole.ASSISTANT,
+                content=assistant_text,
+                message_type=MessageType.TEXT,
+            )
+        )
 
-    def _build_enhanced_message_history(self, message_history: List[Dict], memory_context: Dict, rag_context: List = None) -> List[Dict]:
-        """
-        构建包含记忆和RAG上下文的增强消息历史
-        """
-        enhanced_history = []
+        # 10) Store memory if enabled
+        if chat_request.use_memory:
+            try:
+                await self._store_conversation_in_memory(
+                    chat_request.message,
+                    assistant_text,
+                    chat_request.conversation_id,
+                    user_id=user_id,
+                    session_id=session_id,
+                )
+            except Exception as e:
+                logger.exception("chat.memory.store error: %s", e)
 
-        # 添加系统提示
-        system_prompt = """You are an AI shopping assistant with memory and knowledge base capabilities. You have access to previous conversations, important information about the user, and a comprehensive shopping database.
+        duration_ms = (time.perf_counter() - start) * 1000
+        logger.info("service.chat.process duration_ms=%.1f conv_id=%s rag=%s products=%s llm_ms=%.1f", duration_ms, chat_request.conversation_id, bool(rag_context), bool(products_context), llm_ms)
 
-Instructions:
-1. **IMPORTANT**: Always remember and actively use user preferences mentioned in previous conversations
-2. If the user mentioned preferences before (brands, price range, features, colors, sizes, etc.), remember and apply them in your recommendations
-3. When the user asks about their preferences or asks you to remember something, acknowledge it and store it in your memory
-4. Use the memory context below to provide personalized and consistent responses
-5. Use the knowledge base information to provide accurate pricing and product information
-6. Refer to previous interactions when relevant
-7. Provide specific price ranges and comparisons when available
-8. Be conversational and natural while using all available context
+        return ChatResponse(
+            response=assistant_text,
+            conversation_id=chat_request.conversation_id,
+            message_id=getattr(assistant, "id", 0),
+            model_used=result.get("model_used", model),
+            tokens_used=result.get("tokens_used"),
+        )
 
-"""
+    # ------------------------------
+    # Helpers
+    # ------------------------------
+    def _is_shopping_related_query(self, text: str) -> bool:
+        if not text:
+            return False
+        t = text.lower()
+        keywords = [
+            "买", "购买", "优惠", "折扣", "便宜", "价格", "对比", "推荐", "手机", "电脑", "耳机", "相机",
+            "taobao", "淘宝", "jd", "京东", "拼多多", "pdd", "比价", "购物", "配置", "性价比",
+            "选", "评测", "测评", "参数",
+        ]
+        return any(k in text for k in keywords) or any(k in t for k in ["taobao", "jd", "pdd"])
 
-        # 添加知识库上下文
+    def _build_enhanced_message_history(
+        self,
+        message_history: List[Dict[str, str]],
+        memory_context: Dict[str, Any],
+        rag_context: List[Any] = None,
+        products_context: List[Dict[str, Any]] = None,
+    ) -> List[Dict[str, str]]:
+        rag_context = rag_context or []
+        products_context = products_context or []
+
+        system_prompt = (
+            "You are a helpful shopping assistant. Use user memory, knowledge base facts, and real-time product data to answer.\n"
+            "Rules:\n"
+            "- If recommending products, summarize key specs and provide reasoning.\n"
+            "- Prefer products that align with user preferences if known.\n"
+            "- If prices are in CNY unless otherwise noted; mention currency if known.\n"
+            "- If insufficient data, say so clearly and suggest next steps.\n\n"
+        )
+
+        # Add KB context
         if rag_context:
             system_prompt += "Knowledge Base Information (Shopping & Pricing Data):\n"
             for i, result in enumerate(rag_context, 1):
-                system_prompt += f"[KB {i}]: {result.content}\n\n"
+                try:
+                    content = result.content  # Pydantic model
+                except Exception:
+                    content = result.get("content", "") if isinstance(result, dict) else str(result)
+                system_prompt += f"[KB {i}]: {content}\n\n"
 
-        # 添加记忆上下文
-        if memory_context.get("relevant_memories"):
-            system_prompt += "Memory Context (Previous Conversations & User Preferences):\n"
-            # 优先显示偏好记忆
-            preference_memories = [m for m in memory_context["relevant_memories"] if m.get("source") == "preference_memory" or "preference" in (m.get("content", "").lower())]
-            other_memories = [m for m in memory_context["relevant_memories"] if m not in preference_memories]
-            
-            # 先显示偏好记忆
-            if preference_memories:
-                system_prompt += "\n--- User Preferences (IMPORTANT - Use these in recommendations): ---\n"
-                for i, memory in enumerate(preference_memories[:5], 1):
-                    system_prompt += f"[Preference {i}]: {memory['content']} (Type: {memory['type']}, Importance: {memory['importance']})\n"
-            
-            # 再显示其他记忆
-            if other_memories:
-                system_prompt += "\n--- Other Context: ---\n"
-                for i, memory in enumerate(other_memories[:5], 1):
-                    system_prompt += f"[Memory {i}]: {memory['content']} (Type: {memory['type']}, Importance: {memory['importance']})\n"
-            
+        # Add Taobao products context
+        if products_context:
+            system_prompt += "Real-time Taobao Product Information:\n"
+            for i, p in enumerate(products_context, 1):
+                system_prompt += (
+                    f"[Product {i}] 标题: {p.get('title')}, "
+                    f"价格: {p.get('price')}, 原价: {p.get('original_price')}, "
+                    f"折扣: {p.get('discount_rate')}, 评分: {p.get('rating')}, "
+                    f"评论数: {p.get('review_count')}, 销量: {p.get('sales_count')}, "
+                    f"链接: {p.get('product_url')}\n"
+                )
             system_prompt += "\n"
 
-        # 添加工作记忆
-        if memory_context.get("working_memory", {}).get("context_data"):
-            system_prompt += f"\nWorking Memory Context: {json.dumps(memory_context['working_memory']['context_data'], ensure_ascii=False)}\n"
-
-        system_prompt += "\nNow, respond to the user's message considering all the context above. If they ask about prices or product comparisons, use the knowledge base information to provide specific details."
-
-        enhanced_history.append({"role": "system", "content": system_prompt})
-
-        # 添加原始消息历史
-        enhanced_history.extend(message_history)
-
-        return enhanced_history
-
-    async def _store_conversation_in_memory(self, user_message: str, assistant_response: str, conversation_id: int, user_id: Optional[int], session_id: str):
-        """
-        将对话内容存储到记忆系统，并自动提取用户偏好
-        """
-        try:
-            # 检测是否包含用户偏好信息
-            preference_keywords = [
-                "喜欢", "偏好", "偏好", "想要", "希望", "需要", "要求",
-                "不喜欢", "讨厌", "避免", "不想要",
-                "预算", "价格", "价位", "多少钱", "花费",
-                "品牌", "牌子", "型号", "款式", "颜色", "尺码",
-                "总是", "经常", "通常", "一般"
-            ]
-            
-            is_preference_related = any(keyword in user_message for keyword in preference_keywords)
-            
-            # 存储用户消息
-            user_memory = MemoryCreate(
-                content=user_message,
-                memory_type="semantic" if is_preference_related else "episodic",
-                importance_score=0.8 if is_preference_related else 0.6,
-                user_id=user_id,
-                metadata={
-                    "source": "user_input", 
-                    "conversation_id": conversation_id,
-                    "is_preference": is_preference_related
-                },
-                tags=["preference"] if is_preference_related else []
-            )
-            await self.memory_service.create_memory(user_memory)
-
-            # 存储助手回复
-            assistant_memory = MemoryCreate(
-                content=assistant_response,
-                memory_type="episodic",
-                importance_score=0.8,
-                user_id=user_id,
-                metadata={"source": "assistant_response", "conversation_id": conversation_id}
-            )
-            await self.memory_service.create_memory(assistant_memory)
-            
-            # 如果包含偏好信息，创建一个专门的偏好记忆
-            if is_preference_related:
+        # Add memory context
+        if memory_context.get("relevant_memories"):
+            system_prompt += "Relevant user memories/preferences:\n"
+            for i, mem in enumerate(memory_context.get("relevant_memories", []), 1):
                 try:
-                    # 使用LLM提取偏好信息
-                    llm_service = get_llm_service()
-                    if llm_service:
-                        preference_prompt = f"""
-从以下用户消息中提取用户的购物偏好信息，包括：
-- 品牌偏好（喜欢的品牌或不喜欢哪些品牌）
-- 价格偏好（预算范围、价位要求）
-- 商品特性偏好（颜色、尺寸、款式等）
-- 其他特殊要求
+                    content = mem.content
+                except Exception:
+                    content = mem.get("content", "") if isinstance(mem, dict) else str(mem)
+                system_prompt += f"[MEM {i}]: {content}\n"
+            system_prompt += "\n"
 
-用户消息：{user_message}
+        # Add working memory/session
+        if memory_context.get("working_memory"):
+            system_prompt += f"Working context: {memory_context.get('working_memory')}\n\n"
 
-请以JSON格式返回提取的偏好信息：
-{{
-    "preferences": {{
-        "brands": ["喜欢的品牌1", "不喜欢的品牌2"],
-        "price_range": {{"min": 0, "max": 1000}},
-        "features": ["特性1", "特性2"],
-        "other": "其他偏好描述"
-    }}
-}}
+        enhanced = [{"role": "system", "content": system_prompt}]
+        enhanced.extend(message_history)
+        return enhanced
 
-只返回JSON，不要其他文字。
-"""
-                        
-                        llm_response = await llm_service.chat_completion([
-                            {"role": "system", "content": "你是偏好提取专家，从对话中提取用户的购物偏好。"},
-                            {"role": "user", "content": preference_prompt}
-                        ], max_tokens=500, temperature=0.3)
-                        
-                        # 尝试解析偏好信息
-                        import json
-                        import re
-                        response_text = llm_response.get("content", "")
-                        # 提取JSON部分
-                        json_match = re.search(r'\{[\s\S]*\}', response_text)
-                        if json_match:
-                            preference_data = json.loads(json_match.group())
-                            preference_summary = json.dumps(preference_data, ensure_ascii=False)
-                            
-                            # 创建偏好记忆
-                            preference_memory = MemoryCreate(
-                                content=f"用户偏好：{preference_summary}",
-                                memory_type="semantic",
-                                importance_score=0.9,
-                                user_id=user_id,
-                                metadata={
-                                    "source": "preference_extraction",
-                                    "conversation_id": conversation_id,
-                                    "preference_data": preference_data
-                                },
-                                tags=["preference", "user_preference", "shopping_preference"]
-                            )
-                            await self.memory_service.create_memory(preference_memory)
-                except Exception as e:
-                    print(f"Error extracting preference: {e}")
-                    # 即使提取失败，也继续存储对话记忆
-
+    async def _store_conversation_in_memory(
+        self,
+        user_text: str,
+        assistant_text: str,
+        conversation_id: int,
+        user_id: Optional[int] = None,
+        session_id: Optional[str] = None,
+    ):
+        try:
+            # store a brief summary of the exchange
+            summary = f"User: {user_text}\nAssistant: {assistant_text[:1000]}"
+            mem = MemoryCreate(
+                content=summary,
+                metadata={"source": "chat", "conversation_id": conversation_id, "session_id": session_id},
+            )
+            await self.memory_service.create_memory(mem)
         except Exception as e:
-            print(f"Error storing conversation in memory: {e}")
-
-    def _is_shopping_related_query(self, query: str) -> bool:
-        """
-        检测是否为购物相关查询
-        """
-        shopping_keywords = [
-            "价格", "多少钱", "多少钱", "价钱", "费用", "花费", "预算",
-            "对比", "比较", "哪个好", "推荐", "评价", "性价比",
-            "购买", "买", "购买", "下单", "优惠", "促销", "折扣",
-            "运动鞋", "跑鞋", "篮球鞋", "休闲鞋", "靴子", "凉鞋",
-            "耐克", "nike", "阿迪达斯", "adidas", "匡威", "converse",
-            "万斯", "vans", "新百伦", "new balance", "亚瑟士", "asics",
-            "牌子", "品牌", "型号", "款式", "颜色", "尺码", "尺寸"
-        ]
-
-        query_lower = query.lower()
-        return any(keyword in query_lower for keyword in shopping_keywords)
+            logger.debug("store memory failed: %s", e)

@@ -105,6 +105,153 @@ class APIClient {
     });
   }
 
+  /**
+   * 流式聊天（SSE）
+   * 使用 /api/chat/chat/stream，逐步通过回调返回增量文本
+   */
+  async streamChatMessage(message, conversationId = null, options = {}, callbacks = {}) {
+    const config = await this.getConfig();
+    const url = `${config.apiUrl || this.baseUrl}/api/chat/chat/stream`;
+
+    const body = {
+      message,
+      conversation_id: conversationId,
+      message_type: options.message_type || 'text',
+      model: options.model || 'glm-4-0520',
+      use_memory: options.use_memory !== undefined ? options.use_memory : true,
+      use_rag: options.use_rag !== undefined ? options.use_rag : false,
+      max_tokens: options.max_tokens,
+      temperature: options.temperature,
+    };
+
+    const controller = new AbortController();
+    if (callbacks.onController) {
+      callbacks.onController(controller);
+    }
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (!res.ok || !res.body) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`SSE request failed: ${res.status} ${res.statusText} ${text}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const parts = buffer.split(/\n\n/);
+        buffer = parts.pop() || '';
+
+        for (const part of parts) {
+          const lines = part.split(/\n/);
+          let event = null;
+          let data = '';
+
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              event = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              const d = line.slice(5);
+              data += d.startsWith(' ') ? d.slice(1) : d;
+            }
+          }
+
+          if (event === 'error') {
+            callbacks.onError && callbacks.onError(new Error(data || 'SSE stream error'));
+            continue;
+          }
+
+          if (event === 'meta') {
+            try {
+              const meta = JSON.parse(data);
+              callbacks.onMeta && callbacks.onMeta(meta);
+            } catch {
+              // ignore malformed meta
+            }
+            continue;
+          }
+
+          if (event === 'done' || data === '[DONE]') {
+            if (event === 'done') {
+              try {
+                const payload = JSON.parse(data);
+                callbacks.onDone && callbacks.onDone(payload);
+              } catch {
+                callbacks.onDone && callbacks.onDone();
+              }
+            } else {
+              callbacks.onDone && callbacks.onDone();
+            }
+            continue;
+          }
+
+          if (!event && data) {
+            callbacks.onDelta && callbacks.onDelta(data);
+          }
+        }
+      }
+
+      // 处理缓冲区中可能残留的最后一个事件
+      if (buffer.trim()) {
+        const lines = buffer.split(/\n/);
+        let event = null;
+        let data = '';
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            event = line.slice(6).trim();
+          } else if (line.startsWith('data:')) {
+            const d = line.slice(5);
+            data += d.startsWith(' ') ? d.slice(1) : d;
+          }
+        }
+        if (event === 'done' || data === '[DONE]') {
+          if (event === 'done') {
+            try {
+              const payload = JSON.parse(data);
+              callbacks.onDone && callbacks.onDone(payload);
+            } catch {
+              callbacks.onDone && callbacks.onDone();
+            }
+          } else {
+            callbacks.onDone && callbacks.onDone();
+          }
+        } else if (event === 'meta') {
+          try {
+            const meta = JSON.parse(data);
+            callbacks.onMeta && callbacks.onMeta(meta);
+          } catch {
+            // ignore
+          }
+        } else if (data) {
+          callbacks.onDelta && callbacks.onDelta(data);
+        }
+      }
+    } catch (err) {
+      if (err && err.name === 'AbortError') {
+        callbacks.onError && callbacks.onError(new Error('Stream aborted'));
+        return;
+      }
+      callbacks.onError && callbacks.onError(err);
+      throw err;
+    } finally {
+      callbacks.onDone && callbacks.onDone();
+    }
+  }
+
   async sendEnhancedChat(request) {
     return this.request('/api/chat/enhanced', {
       method: 'POST',
@@ -172,6 +319,14 @@ class APIClient {
 
   async analyzeRisk(productId) {
     return this.request(`/api/ecommerce/products/${productId}/risk-analysis`);
+  }
+
+  // 电商RAG推荐（手机导购等）
+  async getEcommerceRecommendations(request) {
+    return this.request('/api/ecommerce/recommendations', {
+      method: 'POST',
+      body: request,
+    });
   }
 
   // 商品推荐

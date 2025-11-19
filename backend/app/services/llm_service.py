@@ -3,6 +3,9 @@ from typing import List, Dict, Any, Optional
 from ..core.config import settings
 import json
 import asyncio
+import logging
+
+logger = logging.getLogger("uvicorn.error")
 
 try:
     from openai import AzureOpenAI
@@ -545,6 +548,92 @@ class LLMService:
         except Exception as e:
             logger.error(f"LLM response generation error: {str(e)}")
             return ""
+
+    async def stream_chat(
+        self,
+        messages: List[Dict[str, str]],
+        model: Optional[str] = None,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
+    ):
+        """
+        异步生成器：逐步 yield LLM 输出的增量文本（delta）。
+        仅在底层 provider 支持 stream 时工作。
+        """
+        actual_model = model or self.text_model
+        actual_max_tokens = max_tokens or self.max_tokens
+        actual_temperature = temperature or self.temperature
+
+        try:
+            # 根据不同 provider 获取流对象
+            if self.llm_provider == "azure" and AZURE_AVAILABLE:
+                response = await self._azure_chat_completion(
+                    messages,
+                    actual_model,
+                    actual_max_tokens,
+                    actual_temperature,
+                    stream=True,
+                )
+            elif self.llm_provider == "bigmodel":
+                if not BIGMODEL_AVAILABLE:
+                    raise Exception("zhipuai package not installed. Please run: pip install zhipuai")
+                response = await self._bigmodel_chat_completion(
+                    messages,
+                    actual_model,
+                    actual_max_tokens,
+                    actual_temperature,
+                    stream=True,
+                )
+            else:
+                # 兜底：OpenAI 标准流
+                response = await self._openai_chat_completion(
+                    messages,
+                    actual_model,
+                    actual_max_tokens,
+                    actual_temperature,
+                    stream=True,
+                )
+
+            # 统一解析增量内容
+            # 注意：部分 SDK 的流是同步可迭代；为兼容，这里在异步生成器里直接迭代
+            accumulated = []
+            for event in response:
+                try:
+                    # OpenAI/Azure 风格：event.choices[0].delta.content
+                    delta_obj = None
+                    if hasattr(event, "choices") and event.choices:
+                        delta_obj = getattr(event.choices[0], "delta", None)
+                        if delta_obj is None:
+                            # 有些实现用 .message 或者 .delta 是 dict
+                            delta_obj = getattr(event.choices[0], "message", None)
+                    delta_text = ""
+                    if isinstance(delta_obj, dict):
+                        delta_text = delta_obj.get("content", "") or ""
+                    else:
+                        # 尝试属性访问
+                        delta_text = getattr(delta_obj, "content", "") if delta_obj is not None else ""
+
+                    # BigModel(zhipuai) 兼容：有时直接在 event.delta 或 event.choices[0].delta 中
+                    if not delta_text and hasattr(event, "delta"):
+                        maybe = getattr(event, "delta", None)
+                        if isinstance(maybe, dict):
+                            delta_text = maybe.get("content", "") or ""
+                        else:
+                            delta_text = getattr(maybe, "content", "") or ""
+
+                    if delta_text:
+                        accumulated.append(delta_text)
+                        yield delta_text
+                except Exception as parse_err:
+                    # 跳过无法解析的片段
+                    logger.debug(f"stream chunk parse error: {parse_err}")
+                    continue
+
+            # 可选：在流结束时 yield 一个 done 事件标记，由上层 SSE 包装时设置为 event: done
+            # 这里不直接输出，交给 SSE 层处理更合适
+        except Exception as e:
+            logger.error(f"LLM stream_chat error: {e}")
+            raise
 
 # 全局LLM服务实例（延迟初始化）
 _llm_service_instance = None

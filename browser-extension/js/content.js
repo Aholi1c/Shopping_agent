@@ -862,31 +862,36 @@
       chrome.runtime.sendMessage({ action: 'openSidePanel' });
     });
     
-    // 添加样式
+    // 统一风格：使用与侧边栏一致的橙色渐变与阴影
     button.style.cssText = `
       position: fixed;
       right: 20px;
       bottom: 80px;
       width: 48px;
       height: 48px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #ff9900 0%, #ffa41c 100%);
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      z-index: 999999;
-      transition: transform 0.2s;
-      color: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15), 0 3px 10px rgba(255,153,0,.25);
+      border: 1px solid rgba(255,153,0,.65);
+      z-index: 2147483646;
+      transition: transform 0.2s, box-shadow .18s, filter .18s;
+      color: #222;
     `;
     
     button.addEventListener('mouseenter', () => {
-      button.style.transform = 'scale(1.1)';
+      button.style.transform = 'scale(1.06)';
+      button.style.filter = 'brightness(1.04)';
+      button.style.boxShadow = '0 6px 16px rgba(0,0,0,0.2), 0 4px 12px rgba(255,153,0,.35)';
     });
     
     button.addEventListener('mouseleave', () => {
       button.style.transform = 'scale(1)';
+      button.style.filter = 'none';
+      button.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15), 0 3px 10px rgba(255,153,0,.25)';
     });
     
     document.body.appendChild(button);
@@ -1045,52 +1050,69 @@
     });
   }
   
-  // 显示通知
+  // 显示通知（统一为与侧边栏一致的卡片样式）
   function showNotification(message, type = 'info') {
-    // 创建通知元素
-    const notification = document.createElement('div');
-    notification.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: ${type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#007bff'};
-      color: white;
-      padding: 15px 20px;
-      border-radius: 8px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-      z-index: 999999;
-      font-size: 14px;
-      max-width: 300px;
-      animation: slideIn 0.3s ease-out;
-    `;
-    notification.textContent = message;
-    
-    // 添加动画样式
-    if (!document.getElementById('notification-styles')) {
-      const style = document.createElement('style');
-      style.id = 'notification-styles';
-      style.textContent = `
-        @keyframes slideIn {
-          from {
-            transform: translateX(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateX(0);
-            opacity: 1;
-          }
-        }
-      `;
-      document.head.appendChild(style);
+    // 宿主容器，避免多个通知重叠
+    const existing = document.querySelector('.shopping-assistant-notification');
+    if (existing) existing.remove();
+
+    const card = document.createElement('div');
+    card.className = 'shopping-assistant-notification';
+
+    // 关闭按钮
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'close-btn';
+    closeBtn.setAttribute('aria-label', '关闭');
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', () => card.remove());
+
+    // 标题区
+    const title = document.createElement('h4');
+    title.textContent = '🛍️ 智能购物助手';
+
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = type === 'success' ? '成功' : type === 'error' ? '错误' : '提示';
+    title.appendChild(badge);
+
+    // 内容区
+    const section = document.createElement('div');
+    section.className = type === 'error' ? 'error' : 'sa-section';
+
+    const p = document.createElement('div');
+    p.style.fontSize = '13px';
+    p.style.lineHeight = '1.5';
+    p.textContent = message;
+    section.appendChild(p);
+
+    // 操作区（可扩展）
+    const actions = document.createElement('div');
+    actions.className = 'sa-actions';
+    // 仅在错误时提供一个“查看侧边栏”操作，其他场景可按需添加
+    if (type === 'error') {
+      const actionBtn = document.createElement('button');
+      actionBtn.className = 'btn-secondary';
+      actionBtn.textContent = '打开侧边栏';
+      actionBtn.addEventListener('click', () => {
+        chrome.runtime.sendMessage({ action: 'openSidePanel' });
+        card.remove();
+      });
+      actions.appendChild(actionBtn);
     }
-    
-    document.body.appendChild(notification);
-    
-    // 3秒后自动移除
+
+    // 装配
+    card.appendChild(closeBtn);
+    card.appendChild(title);
+    card.appendChild(section);
+    if (actions.childElementCount > 0) card.appendChild(actions);
+
+    document.body.appendChild(card);
+
+    // 自动关闭（错误 4s，其它 3s）
+    const ttl = type === 'error' ? 4000 : 3000;
     setTimeout(() => {
-      notification.style.animation = 'slideIn 0.3s ease-out reverse';
-      setTimeout(() => notification.remove(), 300);
-    }, 3000);
+      if (card && card.parentNode) card.remove();
+    }, ttl);
   }
   
   // 在商品价格旁边显示价格对比按钮
@@ -1100,4 +1122,3 @@
   }
   
 })();
-

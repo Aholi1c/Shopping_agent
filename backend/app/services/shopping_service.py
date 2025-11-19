@@ -90,9 +90,7 @@ class ShoppingService:
             try:
                 scraper_platforms = []
                 platform_mapping = {
-                    PlatformType.JD: 'jd',
                     PlatformType.TAOBAO: 'taobao',
-                    PlatformType.PDD: 'pdd'
                 }
                 for platform in request.platforms:
                     if platform in platform_mapping:
@@ -124,12 +122,6 @@ class ShoppingService:
                 for platform in request.platforms:
                     if platform == PlatformType.TAOBAO:
                         task = self._search_taobao({}, request.query, intent)
-                        onebound_tasks.append((platform, task))
-                    elif platform == PlatformType.JD:
-                        task = self._search_jd({}, request.query, intent)
-                        onebound_tasks.append((platform, task))
-                    elif platform == PlatformType.PDD:
-                        task = self._search_pdd({}, request.query, intent)
                         onebound_tasks.append((platform, task))
                 
                 if onebound_tasks:
@@ -244,9 +236,7 @@ class ShoppingService:
     async def _convert_scraper_results(self, scraper_results: Dict, intent: Dict) -> Dict:
         """转换爬虫结果为内部格式"""
         platform_mapping = {
-            'jd': PlatformType.JD,
             'taobao': PlatformType.TAOBAO,
-            'pdd': PlatformType.PDD
         }
 
         converted_results = {}
@@ -518,12 +508,28 @@ class ShoppingService:
         """处理搜索结果"""
         all_products = []
 
-        for platform, products in platform_results.items():
+        # 合法的平台枚举值集合，用于规范化平台字符串
+        valid_platform_values = {p.value for p in PlatformType}
+
+        for platform_key, products in platform_results.items():
+            # 规范化平台标识
+            if isinstance(platform_key, PlatformType):
+                platform_str = platform_key.value
+            else:
+                platform_str = str(platform_key)
+
+            if platform_str not in valid_platform_values:
+                # 对于备用数据等未知平台，统一归为 other
+                platform_str = PlatformType.OTHER.value
+
             for product_data in products:
-                # 检查是否已存在数据库中
+                # 模拟/备用数据(platform='mock')不写入数据库，避免唯一约束和字段不匹配问题
+                if isinstance(product_data, dict) and product_data.get("platform") == "mock":
+                    continue
+
                 existing_product = self.db.query(Product).filter(
                     and_(
-                        Product.platform == platform,
+                        Product.platform == platform_str,
                         Product.product_id == product_data["product_id"]
                     )
                 ).first()
@@ -537,7 +543,10 @@ class ShoppingService:
                     product = existing_product
                 else:
                     # 创建新产品
-                    product_dict = {**product_data, "platform": platform}
+                    product_dict = {**product_data, "platform": platform_str}
+                    product_dict.pop("shop_name", None)
+                    product_dict.pop("search_keyword", None)
+                    product_dict.pop("crawl_time", None)
                     product = Product(**product_dict)
                     self.db.add(product)
 

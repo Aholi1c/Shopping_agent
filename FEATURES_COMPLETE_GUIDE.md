@@ -506,7 +506,7 @@ Background Script处理 → Sidepanel显示 →
     ↓
 Content Script提取商品信息（名称、价格、描述、参数等）
     ↓
-用户点击"分析商品"
+用户点击"y分析商品"
     ↓
 Sidepanel发送分析请求到后端
     ↓

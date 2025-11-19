@@ -6,12 +6,12 @@ from fastapi import APIRouter, HTTPException, Depends, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
+
 from ..core.database import get_db
-# from ..services.ecommerce_rag_service import EcommerceRAGService  # TODO: Create this service
 from ..models.ecommerce_models import Product, PriceHistory, ProductReview
+from ..services.ecommerce_rag_service import EcommerceRAGService
 
 router = APIRouter()
-
 class ProductSearchRequest(BaseModel):
     query: str
     category: Optional[str] = None
@@ -41,7 +41,7 @@ async def search_products(request: ProductSearchRequest, db: Session = Depends(g
     """商品搜索"""
     try:
         # 创建RAG服务
-        # rag_service = EcommerceRAGService(db)  # TODO: Create this service
+        rag_service = EcommerceRAGService(db)  # TODO: Create this service
 
         # 构建搜索查询
         search_query = request.query
@@ -96,33 +96,36 @@ async def search_products(request: ProductSearchRequest, db: Session = Depends(g
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/recommendations")
-async def get_product_recommendations(request: ProductRecommendationRequest, db: Session = Depends(get_db)):
-    """获取商品推荐"""
-    try:
-        # 创建RAG服务
-        # rag_service = EcommerceRAGService(db)  # TODO: Create this service
+async def get_product_recommendations(
+    request: ProductRecommendationRequest,
+    db: Session = Depends(get_db),
 
-        # 生成推荐
-        # recommendations = rag_service.generate_product_recommendations(
-        #     query=request.query,
-        #     budget=request.budget,
-        #     preferences=request.preferences
-        # )
-        recommendations = []  # Placeholder until RAG service is implemented
+):
+    """
+    获取商品推荐（已接入：电商 RAG + 淘宝实时数据）
+
+    当前策略：
+    1. 使用电商专用知识库（ecommerce_knowledge）检索行业知识
+    2. 仅通过淘宝（Onebound API）搜索候选商品
+    3. 使用 LLM 生成结合知识与商品数据的推荐文案
+    """
+    try:
+        rag_service=EcommerceRAGService(db)
+        result = await rag_service.recommend_with_taobao(request)
 
         return {
             "success": True,
             "data": {
-                "recommendations": recommendations[:request.limit],
+                "recommendation_text": result.get("recommendation_text"),
+                "products": result.get("products", [])[: request.limit],
                 "query": request.query,
                 "budget": request.budget,
-                "preferences": request.preferences
-            }
+                "preferences": request.preferences,
+            },
         }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 @router.post("/knowledge-search")
 async def search_knowledge(request: KnowledgeSearchRequest, db: Session = Depends(get_db)):
     """搜索知识库"""

@@ -17,7 +17,7 @@
     "http://*/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "js/background.js"
   },
   "content_scripts": [
     {
@@ -38,13 +38,13 @@
         "*://*.amazon.com.au/*",
         "*://*.amazon.in/*"
       ],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "js": ["js/content.js"],
+      "css": ["css/content.css"],
       "run_at": "document_idle"
     }
   ],
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "html/popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -53,7 +53,7 @@
     }
   },
   "side_panel": {
-    "default_path": "sidepanel.html"
+    "default_path": "html/sidepanel.html"
   },
   "icons": {
     "16": "icons/icon16.png",
@@ -63,7 +63,12 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["sidepanel.html", "content-script.js", "styles/*"],
+      "resources": [
+        "html/sidepanel.html",
+        "css/*",
+        "js/*",
+        "icons/*"
+      ],
       "matches": ["<all_urls>"]
     }
   ],
@@ -71,4 +76,3 @@
     "extension_pages": "script-src 'self'; object-src 'self'"
   }
 }
-

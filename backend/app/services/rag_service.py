@@ -303,7 +303,7 @@ class RAGService:
                     document_id=result["document_id"],
                     chunk_index=result["chunk_index"],
                     score=result["score"],
-                    metadata=result.get("metadata", {})
+                    metadata=result.get("meta_data", {})
                 )
                 results.append(rag_result)
 
