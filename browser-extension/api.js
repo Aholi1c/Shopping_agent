@@ -1,6 +1,6 @@
 /**
  * API Client for Browser Extension
- * 与后端API通信的客户端
+ * Client for communicating with backend API
  */
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -35,7 +35,7 @@ class APIClient {
       },
     };
     
-    // 如果是FormData，不要设置Content-Type，让浏览器自动设置
+    // If FormData, don't set Content-Type, let browser set it automatically
     if (mergedOptions.body instanceof FormData) {
       delete mergedOptions.headers['Content-Type'];
     } else if (mergedOptions.body && typeof mergedOptions.body === 'object') {
@@ -46,31 +46,31 @@ class APIClient {
       const response = await fetch(url, mergedOptions);
       
       if (!response.ok) {
-        // 尝试获取详细的错误信息
+        // Try to get detailed error information
         let errorMessage = `API request failed: ${response.statusText} (${response.status})`;
         try {
           const errorData = await response.json();
           errorMessage = errorData.detail || errorData.message || errorMessage;
         } catch (e) {
-          // 如果无法解析JSON，尝试读取文本
+          // If unable to parse JSON, try to read text
           try {
             const errorText = await response.text();
             if (errorText) {
               errorMessage = errorText.substring(0, 200);
             }
           } catch (e2) {
-            // 忽略解析错误
+            // Ignore parsing errors
           }
         }
         throw new Error(errorMessage);
       }
       
-      // 检查响应内容类型
+      // Check response content type
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
         return await response.json();
       } else {
-        // 如果不是JSON，返回文本
+        // If not JSON, return text
         const text = await response.text();
         try {
           return JSON.parse(text);
@@ -80,15 +80,15 @@ class APIClient {
       }
     } catch (error) {
       console.error('API request error:', error);
-      // 提供更友好的错误信息
+      // Provide more user-friendly error information
       if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-        throw new Error('无法连接到服务器。请确保后端服务正在运行在 http://localhost:8000');
+        throw new Error('Failed to connect to server. Please ensure the backend service is running at http://localhost:8000');
       }
       throw error;
     }
   }
 
-  // 聊天相关API
+  // Chat-related APIs
   async sendChatMessage(message, conversationId = null, options = {}) {
     return this.request('/api/chat/chat', {
       method: 'POST',
@@ -97,7 +97,7 @@ class APIClient {
         conversation_id: conversationId,
         message_type: options.message_type || 'text',
         model: options.model || 'glm-4-0520',
-        use_memory: options.use_memory !== undefined ? options.use_memory : true,  // 默认启用记忆
+        use_memory: options.use_memory !== undefined ? options.use_memory : true,  // Enable memory by default
         use_rag: options.use_rag !== undefined ? options.use_rag : false,
         max_tokens: options.max_tokens,
         temperature: options.temperature,
@@ -112,7 +112,7 @@ class APIClient {
     });
   }
 
-  // 购物相关API
+  // Shopping-related APIs
   async searchProduct(query, platforms = []) {
     return this.request('/api/shopping/search', {
       method: 'POST',
@@ -131,13 +131,13 @@ class APIClient {
   }
 
   async comparePrices(productName, platforms = ['jd', 'taobao', 'pdd']) {
-    // 使用shopping API的价格对比功能，它会使用万邦API
+    // Use shopping API's price comparison feature, which uses database data
     return this.request('/api/shopping/price-comparison', {
       method: 'POST',
       body: {
         query: productName,
         platforms: platforms.map(p => {
-          // 转换平台名称格式
+          // Convert platform name format
           const platformMap = {
             'jd': 'jd',
             'taobao': 'taobao',
@@ -174,7 +174,7 @@ class APIClient {
     return this.request(`/api/ecommerce/products/${productId}/risk-analysis`);
   }
 
-  // 商品推荐
+  // Product recommendations
   async getRecommendations(userId, options = {}) {
     return this.request('/api/comparison/recommendations', {
       method: 'POST',
@@ -185,7 +185,7 @@ class APIClient {
     });
   }
 
-  // 视觉搜索
+  // Visual search
   async visualSearch(imageData) {
     const formData = new FormData();
     formData.append('image', imageData);
@@ -193,25 +193,25 @@ class APIClient {
     return this.request('/api/visual-search/search', {
       method: 'POST',
       body: formData,
-      headers: {}, // 让浏览器自动设置Content-Type
+      headers: {}, // Let browser automatically set Content-Type
     });
   }
 
-  // 健康检查
+  // Health check
   async healthCheck() {
     return this.request('/health');
   }
 }
 
-// 导出API客户端实例
+// Export API client instance
 const apiClient = new APIClient();
 
-// 如果在浏览器环境中，将其挂载到window
+// If in browser environment, mount it to window
 if (typeof window !== 'undefined') {
   window.apiClient = apiClient;
 }
 
-// 如果在CommonJS环境中
+// If in CommonJS environment
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = apiClient;
 }
