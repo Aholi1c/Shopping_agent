@@ -220,7 +220,26 @@ async def analyze_product(
         # 提取商品信息（支持多种字段名）
         product_name = product_data.get('name') or product_data.get('title') or product_data.get('product_name') or ''
         product_price = float(product_data.get('price', 0)) or 0
-        product_currency = product_data.get('currency', 'CNY')  # 默认人民币
+        product_currency = product_data.get('currency') or product_data.get('currency_code') or 'CNY'  # 默认人民币
+        
+        # ⚠️ CRITICAL: If currency is missing, try to infer from URL
+        if product_currency == 'CNY' and product_data.get('url'):
+            url = product_data.get('url', '').lower()
+            if 'amazon.com' in url and 'amazon.cn' not in url and 'amazon.co.uk' not in url and 'amazon.com.hk' not in url:
+                product_currency = 'USD'
+                logger.warning(f"Currency not provided, inferred USD from URL: {url}")
+            elif 'amazon.com.hk' in url or 'amazon.hk' in url:
+                product_currency = 'HKD'
+                logger.warning(f"Currency not provided, inferred HKD from URL: {url}")
+            elif 'amazon.cn' in url:
+                product_currency = 'CNY'
+            elif '.hk' in url:
+                product_currency = 'HKD'
+                logger.warning(f"Currency not provided, inferred HKD from URL: {url}")
+        
+        # Log currency information for debugging
+        logger.info(f"Product currency: {product_currency}, Price: {product_price}, URL: {product_data.get('url', 'N/A')}")
+        
         product_platform = product_data.get('platform', '')
         product_id = product_data.get('productId') or product_data.get('product_id') or product_data.get('id') or ''
         product_image = product_data.get('image') or product_data.get('image_url') or ''
@@ -240,7 +259,24 @@ async def analyze_product(
         }
         currency_symbol = currency_symbols.get(product_currency, '¥')
         
-        logger.info(f"Starting product analysis: {product_name}, Price: {currency_symbol}{product_price} ({product_currency}), Platform: {product_platform}")
+        # 货币转换汇率（转换为CNY）
+        exchange_rates = {
+            'CNY': 1.0,
+            'HKD': 0.92,  # 1 HKD = 0.92 CNY
+            'USD': 7.2,   # 1 USD = 7.2 CNY
+            'EUR': 7.8,   # 1 EUR = 7.8 CNY
+            'GBP': 9.1,   # 1 GBP = 9.1 CNY
+            'JPY': 0.048, # 1 JPY = 0.048 CNY
+            'AUD': 4.8,   # 1 AUD = 4.8 CNY
+            'SGD': 5.3,   # 1 SGD = 5.3 CNY
+            'CAD': 5.3    # 1 CAD = 5.3 CNY
+        }
+        
+        # 将当前商品价格转换为CNY（用于与数据库中的价格比较）
+        exchange_rate = exchange_rates.get(product_currency, 1.0)
+        product_price_cny = product_price * exchange_rate
+        
+        logger.info(f"Starting product analysis: {product_name}, Price: {currency_symbol}{product_price} ({product_currency}), Converted to CNY: ¥{product_price_cny:.2f}, Platform: {product_platform}")
         
         # 验证必要的商品信息
         if not product_name:
@@ -267,27 +303,35 @@ async def analyze_product(
                         logger.warning(f"price_comparison is not a dict: {type(price_comparison)}")
                         price_comparison = {}
                     
-                    # 计算节省潜力
+                    # 计算节省潜力（使用CNY价格进行比较）
                     comparison = price_comparison.get("comparison", {})
                     savings_potential = 0
+                    savings_potential_original = 0  # 原始货币的节省
                     min_prices = []
                     
                     if comparison:
-                        # 找到最低价格
+                        # 找到最低价格（数据库中的价格都是CNY）
                         for product_key, data in comparison.items():
                             if isinstance(data, dict) and "min_price" in data:
                                 min_prices.append(data["min_price"])
                         
                         if min_prices:
-                            lowest_price = min(min_prices)
-                            if product_price > 0 and product_price > lowest_price:
-                                savings_potential = product_price - lowest_price
+                            lowest_price_cny = min(min_prices)
+                            # 使用CNY价格进行比较
+                            if product_price_cny > 0 and product_price_cny > lowest_price_cny:
+                                savings_potential = product_price_cny - lowest_price_cny
+                                # 转换为原始货币的节省金额
+                                savings_potential_original = savings_potential / exchange_rate
                     
                     price_analysis = {
                         "current_price": product_price,
+                        "current_price_cny": product_price_cny,  # 转换为CNY后的价格
+                        "currency": product_currency,
+                        "exchange_rate": exchange_rate,
                         "platform": product_platform,
                         "comparison": comparison,
-                        "savings_potential": savings_potential,
+                        "savings_potential": savings_potential,  # CNY节省金额
+                        "savings_potential_original": savings_potential_original,  # 原始货币节省金额
                         "lowest_found_price": min(min_prices) if min_prices else None,
                         "total_comparisons": len(comparison),
                         "status": "success" if comparison else "no_comparison"
@@ -338,14 +382,38 @@ async def analyze_product(
             params_text = "\n".join([f"{k}: {v}" for k, v in list(product_parameters.items())[:20]])  # Max 20 parameters
             product_details_text += f"\n\nProduct Parameters:\n{params_text}"
         
-        # Build price comparison text (note currency units)
+        # Build price comparison text (note currency units and conversion)
         price_comparison_text = ""
         if price_analysis.get("comparison"):
-            price_comparison_text = "\n\nPrice Comparison on Other Platforms (Note: All prices below are in CNY. If the current product uses a different currency, please remind the user about currency conversion):\n"
+            current_price_cny = price_analysis.get("current_price_cny", product_price_cny)
+            price_comparison_text = f"\n\nPrice Comparison on Other Platforms:\n"
+            price_comparison_text += f"- Current Product: {currency_symbol}{product_price} ({product_currency}) = ¥{current_price_cny:.2f} (CNY)\n"
+            price_comparison_text += f"- Exchange Rate: 1 {product_currency} = {exchange_rate} CNY\n"
+            price_comparison_text += f"- All comparison prices below are in CNY (Chinese Yuan):\n"
+            
             for platform, data in price_analysis.get("comparison", {}).items():
                 if isinstance(data, dict):
                     if "min_price" in data:
-                        price_comparison_text += f"- {platform}: ¥{data.get('min_price', 0)}\n"
+                        min_price = data.get('min_price', 0)
+                        price_comparison_text += f"  - {platform}: ¥{min_price:.2f}"
+                        # 显示价格差异
+                        if current_price_cny > 0:
+                            diff = current_price_cny - min_price
+                            diff_percent = (diff / current_price_cny) * 100
+                            if diff > 0:
+                                price_comparison_text += f" (Saves ¥{diff:.2f}, {diff_percent:.1f}% cheaper)"
+                            elif diff < 0:
+                                price_comparison_text += f" (More expensive by ¥{abs(diff):.2f})"
+                        price_comparison_text += "\n"
+            
+            # 显示最低价格和节省潜力
+            if price_analysis.get("lowest_found_price"):
+                lowest_price = price_analysis.get("lowest_found_price")
+                savings = price_analysis.get("savings_potential", 0)
+                if savings > 0:
+                    savings_original = price_analysis.get("savings_potential_original", 0)
+                    price_comparison_text += f"\n- Lowest Price Found: ¥{lowest_price:.2f} (CNY)\n"
+                    price_comparison_text += f"- Potential Savings: {currency_symbol}{savings_original:.2f} ({product_currency}) = ¥{savings:.2f} (CNY)\n"
         
         analysis_prompt = f"""
         Please provide a comprehensive analysis of the following product:
@@ -356,29 +424,82 @@ async def analyze_product(
         {price_comparison_text}
         Risk Assessment Results: {risk_analysis}
         
-        Important Notes:
-        - Current product price currency: {product_currency} ({currency_symbol})
-        - If the product price is in HKD (Hong Kong Dollar), please remind the user about currency conversion (1 HKD ≈ 0.92 CNY)
-        - If the product price is in USD (US Dollar), please remind the user about currency conversion (1 USD ≈ 7.2 CNY)
-        - Price comparison data comes from the database, all prices are in CNY (Chinese Yuan)
+        ⚠️ CRITICAL: CURRENCY UNIT REQUIREMENTS ⚠️
+        - PRIMARY CURRENCY: The product price is {currency_symbol}{product_price} in {product_currency}
+        - You MUST analyze prices primarily using {product_currency} ({currency_symbol})
+        - When discussing the current product, ALWAYS use {product_currency} as the primary unit
+        - CNY conversion (¥{product_price_cny:.2f}) is ONLY for comparing with other platforms
+        - Exchange rate: 1 {product_currency} = {exchange_rate} CNY
+        - Database comparison prices are in CNY, but your main analysis should focus on {product_currency}
         
-        Please provide:
+        Please provide your analysis following these requirements:
+        
         1. Product overview and features (based on product description and parameter information)
-        2. Price reasonableness analysis (note currency units, explain if conversion is needed)
-        3. Price comparison with other platforms (clearly label currency units, explain if currency conversion is needed)
-        4. Risk assessment and recommendations
-        5. Purchase recommendation (buy now / wait for price drop / consider carefully)
-        6. Important considerations (especially remind about currency and exchange rate issues)
+           - Focus on product quality, features, and specifications
         
-        Please use clear and professional language in your analysis to help users make informed purchasing decisions.
+        2. Price reasonableness analysis (PRIMARY: Use {product_currency}):
+           - Start with: "The current price is {currency_symbol}{product_price} ({product_currency})"
+           - Analyze if this price is reasonable for this product in {product_currency}
+           - Compare with typical market prices for similar products (mention if you're converting from CNY for reference)
+           - Example format: "At {currency_symbol}{product_price} ({product_currency}), this product is [reasonable/expensive/cheap] compared to similar items in the market"
+        
+        3. Price comparison with other platforms:
+           - Current product: {currency_symbol}{product_price} ({product_currency}) = ¥{product_price_cny:.2f} (CNY, converted)
+           - Other platforms: All prices shown in CNY
+           - Clearly state: "Compared to other platforms (prices in CNY), this product at {currency_symbol}{product_price} ({product_currency}) is..."
+           - Show savings in BOTH currencies if applicable: {currency_symbol}[amount] ({product_currency}) / ¥[amount] (CNY)
+        
+        4. Risk assessment and recommendations
+           - Consider product quality, seller reputation, shipping, etc.
+        
+        5. Purchase recommendation (buy now / wait for price drop / consider carefully)
+           - Base recommendation on {product_currency} price primarily
+        
+        6. Important considerations:
+           - REMINDER: The actual purchase price will be in {product_currency} ({currency_symbol}{product_price})
+           - Exchange rate: 1 {product_currency} = {exchange_rate} CNY
+           - If comparing with CNY prices, always mention the conversion
+        
+        ⚠️ REMEMBER: Your analysis should primarily use {product_currency} ({currency_symbol}). CNY is only for platform comparison.
+        
+        Please use clear and professional language. Always clearly label currency units ({product_currency} vs CNY) to avoid confusion.
         If product description is provided, please incorporate it for more accurate analysis.
         """
         
         # 调用LLM生成分析
         try:
-            logger.info("Calling LLM to generate comprehensive analysis...")
+            logger.info(f"Calling LLM to generate comprehensive analysis... Currency: {product_currency}, Price: {currency_symbol}{product_price}")
+            
+            # 构建系统提示词，强调货币单位
+            system_prompt = f"""You are a professional shopping assistant, skilled at analyzing product prices, quality, and risks.
+
+🚨 CRITICAL CURRENCY INSTRUCTIONS - READ CAREFULLY 🚨
+The product you are analyzing has the following price information:
+- PRICE: {currency_symbol}{product_price}
+- CURRENCY: {product_currency}
+- This is NOT CNY (Chinese Yuan) unless explicitly stated as CNY
+
+YOU MUST:
+1. ALWAYS use {product_currency} ({currency_symbol}) as the PRIMARY currency in your analysis
+2. NEVER assume the price is in CNY unless the currency is explicitly CNY
+3. When you see {currency_symbol}{product_price}, this means {product_price} {product_currency}, NOT {product_price} CNY
+4. If the currency is USD, $115 means 115 US Dollars, NOT 115 Chinese Yuan
+5. If the currency is HKD, HK$115 means 115 Hong Kong Dollars, NOT 115 Chinese Yuan
+
+CORRECT Examples:
+- For USD: "The product costs $115 (USD)" ✅
+- For USD: "At $115 (USD), this is equivalent to approximately ¥828 (CNY) for comparison" ✅
+- For HKD: "The product costs HK$115 (HKD)" ✅
+
+WRONG Examples (DO NOT DO THIS):
+- "The product costs ¥115" ❌ WRONG if currency is USD
+- "The price is 115 yuan" ❌ WRONG if currency is USD
+- "At 115 CNY" ❌ WRONG if currency is USD
+
+Remember: The user will pay {currency_symbol}{product_price} in {product_currency}. Your analysis must reflect this."""
+            
             llm_response = await llm_service.chat_completion([
-                {"role": "system", "content": "You are a professional shopping assistant, skilled at analyzing product prices, quality, and risks."},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": analysis_prompt}
             ])
             
