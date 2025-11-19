@@ -200,7 +200,7 @@ class VectorService:
                             "importance_score": memory.importance_score,
                             "score": float(distance),
                             "created_at": memory.created_at.isoformat(),
-                            "metadata": memory.meta_data
+                            "metadata": memory.meta_data or {}
                         })
 
             return sorted(results, key=lambda x: x["score"], reverse=True)

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="9e98fcfc-0b5a-4b84-8472-bd043b6e402c" name="更改" comment="">
+      <change afterPath="$PROJECT_DIR$/backend/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/models/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/models/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/services/conversation_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/services/conversation_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/services/enhanced_rag_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/services/enhanced_rag_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/services/memory_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/services/memory_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/services/vector_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/services/vector_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/llm_agent.db" beforeDir="false" afterPath="$PROJECT_DIR$/backend/llm_agent.db" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/backend/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/uploads/vector_store/document_id_mapping.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/uploads/vector_store/document_index.faiss" beforeDir="false" afterPath="$PROJECT_DIR$/backend/uploads/vector_store/document_index.faiss" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/uploads/vector_store/memory_id_mapping.json" beforeDir="false" afterPath="$PROJECT_DIR$/backend/uploads/vector_store/memory_id_mapping.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/uploads/vector_store/memory_index.faiss" beforeDir="false" afterPath="$PROJECT_DIR$/backend/uploads/vector_store/memory_index.faiss" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 0
+}]]></component>
+  <component name="ProjectId" id="35e6MrEBzRTV5d7WS058zBX171e" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/Users/yitong/HKU/sem1/7607 NLP/final project/Shopping_agent",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "vue.rearranger.settings.migration": "true"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-4e2b1448bda8-9a97661f3031-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.27397.106" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="默认任务">
+      <changelist id="9e98fcfc-0b5a-4b84-8472-bd043b6e402c" name="更改" comment="" />
+      <created>1763458145096</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1763458145096</updated>
+      <workItem from="1763458156320" duration="7759000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>
