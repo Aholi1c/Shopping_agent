@@ -429,6 +429,7 @@
             const productDataToSend = {
               name: currentProduct.name || currentProduct.title || '',
               price: currentProduct.price || 0,
+              currency: currentProduct.currency || 'CNY',  // ⚠️ CRITICAL: Include currency field
               platform: currentProduct.platform || 'unknown',
               productId: currentProduct.productId || currentProduct.id || '',
               image: currentProduct.image || currentProduct.image_url || '',
@@ -438,6 +439,7 @@
             };
             
             console.log('Sending analysis request, product data:', productDataToSend);
+            console.log('⚠️ Currency check:', productDataToSend.currency, 'Price:', productDataToSend.price);
             
             const result = await window.apiClient.analyzeProduct(productDataToSend);
             console.log('Received analysis result:', result);
