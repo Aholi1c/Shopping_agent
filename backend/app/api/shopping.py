@@ -58,20 +58,20 @@ async def search_products(
     user_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """多平台商品搜索"""
+    """Multi-platform product search"""
     try:
         shopping_service = get_shopping_service(db)
         return await shopping_service.search_products(request, user_id)
     except Exception as e:
         logger.error(f"Error searching products: {e}")
-        raise HTTPException(status_code=500, detail="搜索商品失败")
+        raise HTTPException(status_code=500, detail="Failed to search products")
 
 @router.get("/products/{product_id}", response_model=ProductResponse)
 async def get_product_details(
     product_id: int,
     db: Session = Depends(get_db)
 ):
-    """获取商品详情"""
+    """Get product details"""
     try:
         shopping_service = get_shopping_service(db)
         product = await shopping_service.get_product_details(product_id)
@@ -82,7 +82,7 @@ async def get_product_details(
         raise
     except Exception as e:
         logger.error(f"Error getting product details: {e}")
-        raise HTTPException(status_code=500, detail="获取商品详情失败")
+        raise HTTPException(status_code=500, detail="Failed to get product details")
 
 @router.get("/products/{product_id}/price-history")
 async def get_price_history(
@@ -90,23 +90,23 @@ async def get_price_history(
     days: int = 30,
     db: Session = Depends(get_db)
 ):
-    """获取价格历史"""
+    """Get price history"""
     try:
         shopping_service = get_shopping_service(db)
         return await shopping_service.get_price_history(product_id, days)
     except Exception as e:
         logger.error(f"Error getting price history: {e}")
-        raise HTTPException(status_code=500, detail="获取价格历史失败")
+        raise HTTPException(status_code=500, detail="Failed to get price history")
 
 @router.post("/compare")
 async def compare_products(
     product_ids: List[int],
     db: Session = Depends(get_db)
 ):
-    """商品对比"""
+    """Compare products"""
     try:
         if len(product_ids) < 2:
-            raise HTTPException(status_code=400, detail="至少需要选择2个商品进行对比")
+            raise HTTPException(status_code=400, detail="At least 2 products are required for comparison")
 
         shopping_service = get_shopping_service(db)
         return await shopping_service.compare_products(product_ids)
@@ -114,20 +114,20 @@ async def compare_products(
         raise
     except Exception as e:
         logger.error(f"Error comparing products: {e}")
-        raise HTTPException(status_code=500, detail="商品对比失败")
+        raise HTTPException(status_code=500, detail="Failed to compare products")
 
 @router.post("/products", response_model=ProductResponse)
 async def create_product(
     product: ProductCreate,
     db: Session = Depends(get_db)
 ):
-    """创建商品"""
+    """Create product"""
     try:
         shopping_service = get_shopping_service(db)
         return await shopping_service.create_product(product)
     except Exception as e:
         logger.error(f"Error creating product: {e}")
-        raise HTTPException(status_code=500, detail="创建商品失败")
+        raise HTTPException(status_code=500, detail="Failed to create product")
 
 # 图片识别和搜索
 @router.post("/image-recognition", response_model=ImageRecognitionResponse)
@@ -136,13 +136,13 @@ async def recognize_product_image(
     user_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """商品图片识别"""
+    """Product image recognition"""
     try:
         image_service = get_image_service(db)
         return await image_service.recognize_product(request, user_id)
     except Exception as e:
         logger.error(f"Error in image recognition: {e}")
-        raise HTTPException(status_code=500, detail="图片识别失败")
+        raise HTTPException(status_code=500, detail="Image recognition failed")
 
 @router.post("/image-search", response_model=ImageSearchResponse)
 async def search_by_image(
@@ -150,13 +150,13 @@ async def search_by_image(
     user_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """以图搜图"""
+    """Search by image"""
     try:
         image_service = get_image_service(db)
         return await image_service.search_by_image(request, user_id)
     except Exception as e:
         logger.error(f"Error in image search: {e}")
-        raise HTTPException(status_code=500, detail="图片搜索失败")
+        raise HTTPException(status_code=500, detail="Image search failed")
 
 @router.get("/products/{product_id}/similar", response_model=SimilarProductResponse)
 async def get_similar_products(
@@ -167,7 +167,7 @@ async def get_similar_products(
     include_semantic: bool = True,
     db: Session = Depends(get_db)
 ):
-    """获取相似商品"""
+    """Get similar products"""
     try:
         request = SimilarProductRequest(
             product_id=product_id,
@@ -180,7 +180,7 @@ async def get_similar_products(
         return await image_service.get_similar_products(request)
     except Exception as e:
         logger.error(f"Error getting similar products: {e}")
-        raise HTTPException(status_code=500, detail="获取相似商品失败")
+        raise HTTPException(status_code=500, detail="Failed to get similar products")
 
 @router.post("/upload-image-features")
 async def upload_image_features(
@@ -188,17 +188,17 @@ async def upload_image_features(
     image_url: str,
     db: Session = Depends(get_db)
 ):
-    """上传图片并提取特征"""
+    """Upload image and extract features"""
     try:
         image_service = get_image_service(db)
         success = await image_service.extract_image_features(image_url, product_id)
         if success:
-            return {"message": "图片特征提取成功", "product_id": product_id}
+            return {"message": "Image feature extraction successful", "product_id": product_id}
         else:
-            raise HTTPException(status_code=500, detail="图片特征提取失败")
+            raise HTTPException(status_code=500, detail="Image feature extraction failed")
     except Exception as e:
         logger.error(f"Error uploading image features: {e}")
-        raise HTTPException(status_code=500, detail="上传图片特征失败")
+        raise HTTPException(status_code=500, detail="Failed to upload image features")
 
 # 商品分析
 @router.post("/product-analysis")
@@ -207,7 +207,7 @@ async def analyze_product(
     user_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
-    """商品分析（基于商品信息）"""
+    """Product analysis (based on product information)"""
     try:
         from ..services.llm_service import get_llm_service
         from ..services.price_service import PriceService
@@ -240,15 +240,15 @@ async def analyze_product(
         }
         currency_symbol = currency_symbols.get(product_currency, '¥')
         
-        logger.info(f"开始分析商品: {product_name}, 价格: {currency_symbol}{product_price} ({product_currency}), 平台: {product_platform}")
+        logger.info(f"Starting product analysis: {product_name}, Price: {currency_symbol}{product_price} ({product_currency}), Platform: {product_platform}")
         
         # 验证必要的商品信息
         if not product_name:
-            raise HTTPException(status_code=400, detail="商品名称不能为空，请确保在商品详情页面")
+            raise HTTPException(status_code=400, detail="Product name cannot be empty, please ensure you are on a product detail page")
         
         # 验证LLM服务是否可用
         if not llm_service:
-            raise HTTPException(status_code=500, detail="LLM服务未初始化，请检查配置")
+            raise HTTPException(status_code=500, detail="LLM service not initialized, please check configuration")
         
         # 1. 价格分析
         price_analysis = {}
@@ -327,58 +327,58 @@ async def analyze_product(
                 logger.error(f"Risk analysis error: {e}")
                 risk_analysis = {"error": str(e)}
         
-        # 3. 使用LLM生成综合分析
-        # 构建商品详细信息文本
-        product_details_text = f"商品名称: {product_name}\n当前价格: {currency_symbol}{product_price} ({product_currency})\n平台: {product_platform}"
+        # 3. Use LLM to generate comprehensive analysis
+        # Build product details text
+        product_details_text = f"Product Name: {product_name}\nCurrent Price: {currency_symbol}{product_price} ({product_currency})\nPlatform: {product_platform}"
         
         if product_description:
-            product_details_text += f"\n\n商品描述:\n{product_description[:1000]}"  # 限制长度避免token过多
+            product_details_text += f"\n\nProduct Description:\n{product_description[:1000]}"  # Limit length to avoid too many tokens
         
         if product_parameters:
-            params_text = "\n".join([f"{k}: {v}" for k, v in list(product_parameters.items())[:20]])  # 最多20个参数
-            product_details_text += f"\n\n商品参数:\n{params_text}"
+            params_text = "\n".join([f"{k}: {v}" for k, v in list(product_parameters.items())[:20]])  # Max 20 parameters
+            product_details_text += f"\n\nProduct Parameters:\n{params_text}"
         
-        # 构建价格对比文本（注意货币单位）
+        # Build price comparison text (note currency units)
         price_comparison_text = ""
         if price_analysis.get("comparison"):
-            price_comparison_text = "\n\n其他平台价格对比（注意：以下价格均为人民币CNY，如果当前商品是其他货币，请提醒用户注意汇率转换）:\n"
+            price_comparison_text = "\n\nPrice Comparison on Other Platforms (Note: All prices below are in CNY. If the current product uses a different currency, please remind the user about currency conversion):\n"
             for platform, data in price_analysis.get("comparison", {}).items():
                 if isinstance(data, dict):
                     if "min_price" in data:
                         price_comparison_text += f"- {platform}: ¥{data.get('min_price', 0)}\n"
         
         analysis_prompt = f"""
-        请对以下商品进行全面分析：
+        Please provide a comprehensive analysis of the following product:
 
         {product_details_text}
         
-        价格分析结果: {price_analysis}
+        Price Analysis Results: {price_analysis}
         {price_comparison_text}
-        风险评估结果: {risk_analysis}
+        Risk Assessment Results: {risk_analysis}
         
-        重要提示：
-        - 当前商品价格使用货币: {product_currency} ({currency_symbol})
-        - 如果商品价格是HKD（港币），请提醒用户注意汇率转换（1 HKD ≈ 0.92 CNY）
-        - 如果商品价格是USD（美元），请提醒用户注意汇率转换（1 USD ≈ 7.2 CNY）
-        - 价格对比数据来自数据库，均为人民币（CNY）价格
+        Important Notes:
+        - Current product price currency: {product_currency} ({currency_symbol})
+        - If the product price is in HKD (Hong Kong Dollar), please remind the user about currency conversion (1 HKD ≈ 0.92 CNY)
+        - If the product price is in USD (US Dollar), please remind the user about currency conversion (1 USD ≈ 7.2 CNY)
+        - Price comparison data comes from the database, all prices are in CNY (Chinese Yuan)
         
-        请提供：
-        1. 商品概述和特点（基于商品描述和参数信息）
-        2. 价格合理性分析（注意货币单位，如需转换请说明）
-        3. 与其他平台的价格对比（明确标注货币单位，如有汇率转换请说明）
-        4. 风险评估和建议
-        5. 购买建议（立即购买/等待降价/谨慎考虑）
-        6. 需要注意的事项（特别提醒货币和汇率问题）
+        Please provide:
+        1. Product overview and features (based on product description and parameter information)
+        2. Price reasonableness analysis (note currency units, explain if conversion is needed)
+        3. Price comparison with other platforms (clearly label currency units, explain if currency conversion is needed)
+        4. Risk assessment and recommendations
+        5. Purchase recommendation (buy now / wait for price drop / consider carefully)
+        6. Important considerations (especially remind about currency and exchange rate issues)
         
-        请用清晰、专业的语言进行分析，帮助用户做出明智的购买决策。
-        如果提供了商品描述，请结合描述信息进行更准确的分析。
+        Please use clear and professional language in your analysis to help users make informed purchasing decisions.
+        If product description is provided, please incorporate it for more accurate analysis.
         """
         
         # 调用LLM生成分析
         try:
-            logger.info("调用LLM生成综合分析...")
+            logger.info("Calling LLM to generate comprehensive analysis...")
             llm_response = await llm_service.chat_completion([
-                {"role": "system", "content": "你是一个专业的购物助手，擅长分析商品的价格、质量和风险。"},
+                {"role": "system", "content": "You are a professional shopping assistant, skilled at analyzing product prices, quality, and risks."},
                 {"role": "user", "content": analysis_prompt}
             ])
             
@@ -391,15 +391,15 @@ async def analyze_product(
                 comprehensive_analysis = str(llm_response)
             
             if not comprehensive_analysis:
-                logger.warning("LLM返回的分析内容为空")
-                comprehensive_analysis = "分析完成，但未生成详细报告。请检查LLM服务配置。"
+                logger.warning("LLM returned empty analysis content")
+                comprehensive_analysis = "Analysis completed but no detailed report generated. Please check LLM service configuration."
             
-            logger.info(f"LLM分析完成，生成了 {len(comprehensive_analysis)} 字符的分析内容")
+            logger.info(f"LLM analysis completed, generated {len(comprehensive_analysis)} characters of analysis content")
         except Exception as e:
-            logger.error(f"LLM调用失败: {e}")
+            logger.error(f"LLM call failed: {e}")
             import traceback
             logger.error(traceback.format_exc())
-            comprehensive_analysis = f"LLM分析失败: {str(e)}。请检查LLM服务配置（当前使用: {settings.llm_provider}）"
+            comprehensive_analysis = f"LLM analysis failed: {str(e)}. Please check LLM service configuration (currently using: {settings.llm_provider})"
         
         return {
             "success": True,
@@ -413,7 +413,7 @@ async def analyze_product(
                 "recommendation": {
                     "action": "consider",  # consider, buy_now, wait, avoid
                     "confidence": 0.7,
-                    "reason": "基于价格和风险分析的综合建议"
+                    "reason": "Comprehensive recommendation based on price and risk analysis"
                 }
             },
             "timestamp": datetime.now().isoformat()
@@ -421,26 +421,26 @@ async def analyze_product(
         
     except Exception as e:
         logger.error(f"Error analyzing product: {e}")
-        raise HTTPException(status_code=500, detail=f"商品分析失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Product analysis failed: {str(e)}")
 
 # 价格对比和优惠计算
 class PriceComparisonRequest(BaseModel):
-    """价格对比请求"""
-    query: str = Field(..., description="商品名称或搜索关键词")
-    platforms: Optional[List[str]] = Field(None, description="平台列表，如 ['jd', 'taobao', 'pdd']")
+    """Price comparison request"""
+    query: str = Field(..., description="Product name or search keywords")
+    platforms: Optional[List[str]] = Field(None, description="Platform list, e.g. ['jd', 'taobao', 'pdd']")
 
 @router.post("/price-comparison")
 async def compare_prices(
     request: PriceComparisonRequest,
     db: Session = Depends(get_db)
 ):
-    """多平台价格对比 - 使用万邦API获取商品数据"""
+    """Multi-platform price comparison - uses database data (from products_data.json)"""
     try:
         query = request.query
         platforms_param = request.platforms
         
         if not query:
-            raise HTTPException(status_code=400, detail="缺少必需参数: query")
+            raise HTTPException(status_code=400, detail="Missing required parameter: query")
         
         # 转换平台名称到PlatformType枚举
         from ..models.schemas import PlatformType
@@ -478,7 +478,7 @@ async def compare_prices(
                         "comparison": {},
                         "total_products": 0,
                         "search_time": 0,
-                        "message": "未找到商品，请尝试使用更具体的关键词。如果配置了万邦API，请检查API密钥是否正确。",
+                        "message": "Product not found, please try using more specific keywords. If Onebound API is configured, please check if the API key is correct.",
                         "error": result.get("error")
                     }
             
@@ -494,7 +494,7 @@ async def compare_prices(
                         "comparison": {},
                         "total_products": total_products,
                         "search_time": result.get("search_time", 0),
-                        "message": f"找到 {total_products} 个商品，但无法进行价格对比。请尝试使用更具体的关键词。",
+                        "message": f"Found {total_products} products, but unable to perform price comparison. Please try using more specific keywords.",
                         "data_source": result.get("data_source", "unknown")
                     }
                 else:
