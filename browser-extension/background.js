@@ -1,27 +1,27 @@
 /**
  * Background Service Worker
- * 处理后台通信和状态管理
+ * Handles background communication and state management
  */
 
 const API_BASE_URL = 'http://localhost:8000';
 let currentTabId = null;
 
-// 确保所有API调用都是安全的
+// Ensure all API calls are safe
 try {
-  // 安装或启动时的初始化
+  // Initialize on install or startup
   if (chrome.runtime && chrome.runtime.onInstalled) {
     chrome.runtime.onInstalled.addListener((details) => {
-      console.log('智能购物助手插件已安装', details.reason);
+      console.log('Smart Shopping Assistant extension installed', details.reason);
       initializeStorage().catch(error => {
         console.error('Failed to initialize storage:', error);
       });
       
-      // 创建右键菜单
+      // Create context menu
       if (chrome.contextMenus && chrome.contextMenus.create) {
         try {
           chrome.contextMenus.create({
             id: 'analyzeProduct',
-            title: '分析当前商品',
+            title: 'Analyze Current Product',
             contexts: ['page', 'selection']
           }, () => {
             if (chrome.runtime.lastError) {
@@ -39,14 +39,14 @@ try {
 
   if (chrome.runtime && chrome.runtime.onStartup) {
     chrome.runtime.onStartup.addListener(() => {
-      console.log('智能购物助手插件已启动');
+      console.log('Smart Shopping Assistant extension started');
       initializeStorage().catch(error => {
         console.error('Failed to initialize storage:', error);
       });
     });
   }
 
-  // 初始化存储
+  // Initialize storage
   async function initializeStorage() {
     try {
       const defaultConfig = {
@@ -68,35 +68,35 @@ try {
     }
   }
 
-  // 处理标签页更新
+  // Handle tab updates
   if (chrome.tabs && chrome.tabs.onUpdated) {
     chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
       if (changeInfo.status === 'complete' && tab.url) {
-        // 检查是否是购物网站
+        // Check if it's a shopping website
         if (isShoppingSite(tab.url)) {
           currentTabId = tabId;
           
-          // 通知content script提取商品信息
+          // Notify content script to extract product information
           try {
             if (chrome.tabs && chrome.tabs.sendMessage) {
               chrome.tabs.sendMessage(tabId, {
                 action: 'extractProductInfo'
               }, (response) => {
                 if (chrome.runtime.lastError) {
-                  // Content script可能还未加载，这是正常的
+                  // Content script may not be loaded yet, this is normal
                   console.log('Content script not ready:', chrome.runtime.lastError.message);
                 }
               });
             }
           } catch (error) {
-            console.log('发送提取商品信息消息失败:', error);
+            console.log('Failed to send extract product info message:', error);
           }
         }
       }
     });
   }
 
-  // 判断是否是购物网站
+  // Check if it's a shopping website
   function isShoppingSite(url) {
     const shoppingDomains = [
       'jd.com',
@@ -113,7 +113,7 @@ try {
     return shoppingDomains.some(domain => url.includes(domain));
   }
 
-  // 处理来自content script的消息
+  // Handle messages from content script
   if (chrome.runtime && chrome.runtime.onMessage) {
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.action === 'openSidePanel') {
@@ -129,8 +129,8 @@ try {
         });
         sendResponse({ success: true });
       } else if (request.action === 'productInfoExtracted') {
-        // content script通知商品信息已提取
-        console.log('收到商品信息提取通知:', request.productData);
+        // Content script notifies that product information has been extracted
+        console.log('Received product information extraction notification:', request.productData);
         if (request.productData && request.tabId) {
           handleProductExtraction(request.productData, request.tabId).catch(error => {
             console.error('Failed to handle extracted product info:', error);
@@ -141,14 +141,14 @@ try {
         handleAPIRequest(request.endpoint, request.options)
           .then(response => sendResponse({ success: true, data: response }))
           .catch(error => sendResponse({ success: false, error: error.message }));
-        return true; // 保持消息通道开放
+        return true; // Keep message channel open
       }
       
       return true;
     });
   }
 
-  // 处理API请求
+  // Handle API requests
   async function handleAPIRequest(endpoint, options = {}) {
     try {
       const config = chrome.storage && chrome.storage.sync 
@@ -166,13 +166,13 @@ try {
       });
       
       if (!response.ok) {
-        // 尝试获取错误详情
+        // Try to get error details
         let errorMessage = `API request failed: ${response.statusText}`;
         try {
           const errorData = await response.json();
           errorMessage = errorData.detail || errorData.message || errorMessage;
         } catch (e) {
-          // 如果无法解析错误响应，使用默认消息
+          // If unable to parse error response, use default message
         }
         throw new Error(errorMessage);
       }
@@ -180,22 +180,22 @@ try {
       return await response.json();
     } catch (error) {
       console.error('API request error:', error);
-      // 返回更详细的错误信息
+      // Return more detailed error information
       throw new Error(`API request failed: ${error.message}`);
     }
   }
 
-  // 触发分析的辅助函数
+  // Helper function to trigger analysis
   async function triggerAnalysis(productData, tabId) {
     if (!productData) {
-      console.warn('商品信息为空，无法触发分析');
+      console.warn('Product information is empty, unable to trigger analysis');
       return;
     }
     
     try {
-      console.log('触发分析，商品信息:', productData);
+      console.log('Triggering analysis, product information:', productData);
       
-      // 确保商品信息已保存
+      // Ensure product information is saved
       if (chrome.storage && chrome.storage.local) {
         const tabInfo = chrome.tabs && chrome.tabs.get
           ? await chrome.tabs.get(tabId).catch(() => ({ url: '' }))
@@ -211,10 +211,10 @@ try {
           [`product_${tabId}`]: finalProductData,
           [`product_current`]: finalProductData
         });
-        console.log('商品信息已保存:', `product_${tabId}`);
+        console.log('Product information saved:', `product_${tabId}`);
       }
       
-      // 使用storage作为中介触发分析
+      // Use storage as intermediary to trigger analysis
       if (chrome.storage && chrome.storage.local) {
         await chrome.storage.local.set({
           [`analysis_request_${tabId}`]: {
@@ -223,36 +223,36 @@ try {
             timestamp: Date.now()
           }
         });
-        console.log('分析请求已保存到storage');
+        console.log('Analysis request saved to storage');
       }
       
-      // 也尝试直接发送消息给侧边栏
+      // Also try to send message directly to sidepanel
       try {
         chrome.runtime.sendMessage({
           action: 'startAnalysis',
           productData: productData
         }, (response) => {
           if (chrome.runtime.lastError) {
-            console.log('直接发送消息失败（侧边栏可能未加载）:', chrome.runtime.lastError);
-            console.log('侧边栏将在加载时从storage读取分析请求');
+            console.log('Failed to send message directly (sidepanel may not be loaded):', chrome.runtime.lastError);
+            console.log('Sidepanel will read analysis request from storage when loaded');
           } else {
-            console.log('消息发送成功');
+            console.log('Message sent successfully');
           }
         });
       } catch (err) {
-        console.log('发送消息异常:', err);
+        console.log('Exception sending message:', err);
       }
     } catch (error) {
-      console.error('触发分析失败:', error);
+      console.error('Failed to trigger analysis:', error);
     }
   }
 
-  // 处理商品信息提取
+  // Handle product information extraction
   async function handleProductExtraction(productData, tabId) {
     if (!productData) return;
     
     try {
-      // 保存商品信息到存储
+      // Save product information to storage
       if (chrome.storage && chrome.storage.local) {
         const tabInfo = chrome.tabs && chrome.tabs.get
           ? await chrome.tabs.get(tabId).catch(() => ({ url: '' }))
@@ -268,10 +268,10 @@ try {
           [`product_${tabId}`]: finalProductData,
           [`product_current`]: finalProductData
         });
-        console.log('商品信息已保存到storage:', `product_${tabId}`);
+        console.log('Product information saved to storage:', `product_${tabId}`);
       }
       
-      // 如果需要，自动发送到API分析
+      // If needed, automatically send to API for analysis
       if (chrome.storage && chrome.storage.sync) {
         const config = await chrome.storage.sync.get(['config']);
         if (config.config?.autoExtract) {
@@ -281,14 +281,14 @@ try {
               body: productData
             });
             
-            // 保存分析结果
+            // Save analysis result
             if (chrome.storage && chrome.storage.local) {
               await chrome.storage.local.set({
                 [`analysis_${tabId}`]: analysis
               });
             }
             
-            // 通知content script显示分析结果
+            // Notify content script to display analysis result
             if (chrome.tabs && chrome.tabs.sendMessage) {
               try {
                 chrome.tabs.sendMessage(tabId, {
@@ -300,7 +300,7 @@ try {
                   }
                 });
               } catch (error) {
-                console.log('发送分析结果失败:', error);
+                console.log('Failed to send analysis result:', error);
               }
             }
           } catch (error) {
@@ -313,45 +313,45 @@ try {
     }
   }
 
-  // 处理右键菜单点击
+  // Handle context menu click
   if (chrome.contextMenus && chrome.contextMenus.onClicked) {
     chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-      console.log('右键菜单点击:', info.menuItemId, tab);
+      console.log('Context menu clicked:', info.menuItemId, tab);
       if (info.menuItemId === 'analyzeProduct') {
         try {
-          // 1. 首先打开侧边栏
+          // 1. First open the sidepanel
           if (chrome.sidePanel && chrome.sidePanel.open) {
             await chrome.sidePanel.open({ tabId: tab.id });
-            console.log('侧边栏已打开');
+            console.log('Sidepanel opened');
           }
           
-          // 2. 等待一下让侧边栏加载
+          // 2. Wait a bit for sidepanel to load
           await new Promise(resolve => setTimeout(resolve, 500));
           
-          // 3. 先尝试直接从content script提取商品信息
+          // 3. Try to extract product information directly from content script
           let productData = null;
           
-          // 先检查storage中是否已有商品信息
+          // First check if product information already exists in storage
           if (chrome.storage && chrome.storage.local) {
             const existingData = await chrome.storage.local.get([`product_${tab.id}`, `product_current`]);
             productData = existingData[`product_${tab.id}`] || existingData[`product_current`];
             if (productData) {
-              console.log('从storage中找到已有商品信息:', productData);
+              console.log('Found existing product information in storage:', productData);
             }
           }
           
-          // 如果没有找到，通知content script提取
+          // If not found, notify content script to extract
           if (!productData) {
-            console.log('未找到商品信息，请求content script提取...');
+            console.log('Product information not found, requesting content script to extract...');
             if (chrome.tabs && chrome.tabs.sendMessage) {
               try {
                 chrome.tabs.sendMessage(tab.id, {
                   action: 'extractProductInfo'
                 }, (response) => {
                   if (chrome.runtime.lastError) {
-                    console.error('发送提取商品信息消息失败:', chrome.runtime.lastError);
+                    console.error('Failed to send extract product info message:', chrome.runtime.lastError);
                   } else {
-                    console.log('提取商品信息消息已发送');
+                    console.log('Extract product info message sent');
                   }
                 });
               } catch (error) {
@@ -360,26 +360,26 @@ try {
             }
           }
           
-          // 4. 同时触发分析流程
+          // 4. Also trigger analysis flow
           if (chrome.tabs && chrome.tabs.sendMessage) {
             try {
               chrome.tabs.sendMessage(tab.id, {
                 action: 'analyzeCurrentPage'
               }, (response) => {
                 if (chrome.runtime.lastError) {
-                  console.error('发送分析消息失败:', chrome.runtime.lastError);
-                  // 如果消息发送失败，说明content script可能未加载，尝试等待后重试
+                  console.error('Failed to send analyze message:', chrome.runtime.lastError);
+                  // If message sending failed, content script may not be loaded, try waiting and retry
                   setTimeout(() => {
                     chrome.tabs.sendMessage(tab.id, {
                       action: 'analyzeCurrentPage'
                     }, (retryResponse) => {
                       if (chrome.runtime.lastError) {
-                        console.error('重试发送分析消息也失败:', chrome.runtime.lastError);
+                        console.error('Retry sending analyze message also failed:', chrome.runtime.lastError);
                       }
                     });
                   }, 2000);
                 } else {
-                  console.log('分析消息已发送，等待响应:', response);
+                  console.log('Analyze message sent, waiting for response:', response);
                 }
               });
             } catch (error) {
@@ -387,44 +387,44 @@ try {
             }
           }
           
-          // 5. 等待content script提取商品信息（使用轮询方式）
+          // 5. Wait for content script to extract product information (using polling)
           let attempts = 0;
           const maxAttempts = 5;
           const checkProductInfo = async () => {
             attempts++;
-            console.log(`检查商品信息 (${attempts}/${maxAttempts})...`);
+            console.log(`Checking product information (${attempts}/${maxAttempts})...`);
             
             if (chrome.storage && chrome.storage.local) {
               const storageData = await chrome.storage.local.get([`product_${tab.id}`, `product_current`]);
               const foundProduct = storageData[`product_${tab.id}`] || storageData[`product_current`];
               
               if (foundProduct) {
-                console.log('找到商品信息，触发分析:', foundProduct);
+                console.log('Found product information, triggering analysis:', foundProduct);
                 productData = foundProduct;
                 
-                // 触发侧边栏分析
+                // Trigger sidepanel analysis
                 await triggerAnalysis(foundProduct, tab.id);
               } else if (attempts < maxAttempts) {
-                // 继续等待
+                // Continue waiting
                 setTimeout(checkProductInfo, 500);
               } else {
-                console.warn('等待超时，未找到商品信息');
-                // 即使没有商品信息，也打开侧边栏让用户手动输入
-                console.log('打开侧边栏，让用户手动操作');
+                console.warn('Timeout waiting, product information not found');
+                // Even without product information, open sidepanel for user to manually input
+                console.log('Opening sidepanel for user to manually operate');
               }
             }
           };
           
-          // 开始检查
+          // Start checking
           setTimeout(checkProductInfo, 500);
         } catch (error) {
-          console.error('右键菜单处理错误:', error);
+          console.error('Context menu handling error:', error);
         }
       }
     });
   }
 
-  // 快捷键命令 - 检查API是否可用
+  // Keyboard shortcut commands - check if API is available
   if (chrome.commands && chrome.commands.onCommand) {
     chrome.commands.onCommand.addListener((command) => {
       if (command === 'toggle-sidepanel') {
@@ -445,5 +445,5 @@ try {
 
 } catch (error) {
   console.error('Service Worker initialization error:', error);
-  // 即使有错误，也要确保Service Worker能够注册
+  // Even if there are errors, ensure Service Worker can register
 }

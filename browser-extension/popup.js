@@ -1,23 +1,23 @@
 /**
  * Popup Script
- * 处理弹窗界面的逻辑
+ * Handles popup interface logic
  */
 
 (async () => {
-  // 初始化
+  // Initialize
   init();
   
   async function init() {
-    // 检查当前标签页
+    // Check current tab
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tabs[0]) {
       await loadProductInfo(tabs[0].id);
     }
     
-    // 设置事件监听
+    // Setup event listeners
     setupEventListeners();
     
-    // 检查连接状态
+    // Check connection status
     checkConnectionStatus();
   }
   
@@ -44,7 +44,7 @@
     productCard.style.display = 'block';
     noProduct.style.display = 'none';
     
-    document.getElementById('product-name').textContent = productInfo.name || '未知商品';
+    document.getElementById('product-name').textContent = productInfo.name || 'Unknown Product';
     document.getElementById('product-price').textContent = productInfo.price || '0.00';
   }
   
@@ -57,7 +57,7 @@
   }
   
   function setupEventListeners() {
-    // 打开侧边栏
+    // Open sidepanel
     document.getElementById('open-sidepanel').addEventListener('click', async () => {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tabs[0]) {
@@ -74,7 +74,7 @@
       }
     });
     
-    // 分析商品
+    // Analyze product
     document.getElementById('analyze-btn').addEventListener('click', async () => {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tabs[0]) {
@@ -84,12 +84,12 @@
       }
     });
     
-    // 价格对比
+    // Price comparison
     document.getElementById('compare-btn').addEventListener('click', async () => {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tabs[0]) {
         chrome.sidePanel.open({ tabId: tabs[0].id });
-        // 在侧边栏中打开价格对比页面
+        // Open price comparison page in sidepanel
         chrome.runtime.sendMessage({
           action: 'openSidePanel',
           view: 'price-comparison'
@@ -98,7 +98,7 @@
       }
     });
     
-    // 价格追踪
+    // Price tracker
     document.getElementById('price-tracker').addEventListener('click', async () => {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tabs[0]) {
@@ -111,7 +111,7 @@
       }
     });
     
-    // 比价
+    // Compare prices
     document.getElementById('compare-prices').addEventListener('click', async () => {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tabs[0]) {
@@ -124,7 +124,7 @@
       }
     });
     
-    // 推荐
+    // Recommendations
     document.getElementById('recommendations').addEventListener('click', async () => {
       const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
       if (tabs[0]) {
@@ -151,16 +151,16 @@
       
       if (data.status === 'healthy') {
         statusDot.style.backgroundColor = '#52c41a';
-        statusEl.querySelector('span:last-child').textContent = '已连接';
+        statusEl.querySelector('span:last-child').textContent = 'Connected';
       } else {
         statusDot.style.backgroundColor = '#ff4d4f';
-        statusEl.querySelector('span:last-child').textContent = '连接失败';
+        statusEl.querySelector('span:last-child').textContent = 'Connection Failed';
       }
     } catch (error) {
       const statusEl = document.getElementById('connection-status');
       const statusDot = statusEl.querySelector('.status-dot');
       statusDot.style.backgroundColor = '#ff4d4f';
-      statusEl.querySelector('span:last-child').textContent = '连接失败';
+      statusEl.querySelector('span:last-child').textContent = 'Connection Failed';
     }
   }
 })();

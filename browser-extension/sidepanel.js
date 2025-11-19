@@ -1,7 +1,7 @@
 /**
  * Sidepanel Script
- * 侧边栏主应用脚本
- * 这是一个简化版本，如果需要完整的React应用，需要使用构建工具
+ * Main application script for the sidepanel
+ * This is a simplified version. For a full React application, build tools are required.
  */
 
 (function() {
@@ -10,27 +10,47 @@
   let currentProduct = null;
   let currentView = 'chat'; // chat, analysis, comparison, tracker
   
-  // 初始化
+  // Currency symbol mapping
+  const currencySymbols = {
+    'CNY': '¥',
+    'HKD': 'HK$',
+    'USD': '$',
+    'EUR': '€',
+    'GBP': '£',
+    'JPY': 'JP¥',
+    'AUD': 'A$',
+    'SGD': 'S$',
+    'CAD': 'C$'
+  };
+  
+  // Format price with currency symbol
+  function formatPrice(price, currency = 'CNY') {
+    const symbol = currencySymbols[currency] || '¥';
+    const formattedPrice = typeof price === 'number' ? price.toFixed(2) : parseFloat(price || 0).toFixed(2);
+    return `${symbol}${formattedPrice}`;
+  }
+  
+  // Initialize
   init();
   
   async function init() {
-    console.log('侧边栏初始化...');
+    console.log('Sidepanel initializing...');
     
-    // 监听来自background的消息
+    // Listen for messages from background
     if (chrome.runtime && chrome.runtime.onMessage) {
       chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-        console.log('侧边栏收到消息:', request.action, request);
+        console.log('Sidepanel received message:', request.action, request);
         
         if (request.action === 'startAnalysis') {
-          console.log('收到分析请求:', request);
+          console.log('Received analysis request:', request);
           if (request.productData) {
             currentProduct = request.productData;
-            console.log('设置当前商品:', currentProduct);
+            console.log('Setting current product:', currentProduct);
             
-            // 自动切换到分析视图
+            // Automatically switch to analysis view
             currentView = 'analysis';
             
-            // 保存商品信息到storage
+            // Save product info to storage
             chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
               if (tabs[0] && chrome.storage && chrome.storage.local) {
                 chrome.storage.local.set({
@@ -39,25 +59,25 @@
               }
             });
             
-            // 重新渲染
+            // Re-render
             render();
             setupEventListeners();
             
-            // 等待DOM更新后触发分析
+            // Wait for DOM update then trigger analysis
             setTimeout(() => {
-              console.log('尝试触发分析按钮...');
+              console.log('Attempting to trigger analyze button...');
               const analyzeBtn = document.getElementById('analyze-btn');
               if (analyzeBtn) {
-                console.log('找到分析按钮，点击...');
+                console.log('Found analyze button, clicking...');
                 analyzeBtn.click();
               } else {
-                console.warn('未找到分析按钮，等待更长时间...');
+                console.warn('Analyze button not found, waiting longer...');
                 setTimeout(() => {
                   const btn = document.getElementById('analyze-btn');
                   if (btn) {
                     btn.click();
                   } else {
-                    console.error('仍然未找到分析按钮');
+                    console.error('Still cannot find analyze button');
                   }
                 }, 500);
               }
@@ -65,7 +85,7 @@
           }
           sendResponse({ success: true });
         } else if (request.action === 'updateProduct') {
-          // 更新商品信息
+          // Update product information
           if (request.productData) {
             currentProduct = request.productData;
             render();
@@ -77,40 +97,40 @@
       });
     }
     
-    // 获取当前标签页
+    // Get current tab
     const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tabs[0]) {
-      console.log('当前标签页:', tabs[0].id);
-      // 加载当前页面的商品信息
+      console.log('Current tab:', tabs[0].id);
+      // Load product information from current page
       await loadProductInfo(tabs[0].id);
       
-      // 渲染界面
+      // Render interface
       render();
       
-      // 设置事件监听
+      // Setup event listeners
       setupEventListeners();
     }
   }
   
   async function loadProductInfo(tabId) {
     try {
-      // 先检查是否有分析请求
+      // First check if there's an analysis request
       const analysisRequest = await chrome.storage.local.get([`analysis_request_${tabId}`]);
       if (analysisRequest[`analysis_request_${tabId}`]) {
         const request = analysisRequest[`analysis_request_${tabId}`];
-        console.log('发现分析请求:', request);
+        console.log('Found analysis request:', request);
         if (request.productData) {
           currentProduct = request.productData;
           currentView = 'analysis';
           
-          // 清除请求标记
+          // Clear request marker
           chrome.storage.local.remove([`analysis_request_${tabId}`]);
           
-          // 立即触发分析
+          // Immediately trigger analysis
           setTimeout(() => {
             const analyzeBtn = document.getElementById('analyze-btn');
             if (analyzeBtn) {
-              console.log('自动触发分析...');
+              console.log('Auto-triggering analysis...');
               analyzeBtn.click();
             }
           }, 300);
@@ -119,16 +139,16 @@
         }
       }
       
-      // 加载商品信息
+      // Load product information
       const result = await chrome.storage.local.get([`product_${tabId}`, `product_current`]);
       const productInfo = result[`product_${tabId}`] || result[`product_current`];
       
       if (productInfo) {
-        console.log('加载商品信息:', productInfo);
+        console.log('Loaded product information:', productInfo);
         currentProduct = productInfo;
       } else {
-        console.log('未找到商品信息，尝试从页面提取...');
-        // 尝试从当前页面提取
+        console.log('Product information not found, attempting to extract from page...');
+        // Try to extract from current page
         try {
           const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
           if (tabs[0]) {
@@ -136,12 +156,12 @@
               action: 'extractProductInfo'
             }, (response) => {
               if (response && response.success) {
-                console.log('从页面提取的商品信息:', response);
+                console.log('Product information extracted from page:', response);
               }
             });
           }
         } catch (e) {
-          console.warn('无法从页面提取商品信息:', e);
+          console.warn('Unable to extract product information from page:', e);
         }
       }
     } catch (error) {
@@ -155,18 +175,18 @@
     root.innerHTML = `
       <div class="sidepanel-container">
         <div class="sidepanel-header">
-          <h2>🛍️ 智能购物助手</h2>
+          <h2>🛍️ Smart Shopping Assistant</h2>
           <div class="header-actions">
-            <button id="refresh-btn" class="icon-btn" title="刷新">🔄</button>
-            <button id="settings-btn" class="icon-btn" title="设置">⚙️</button>
+            <button id="refresh-btn" class="icon-btn" title="Refresh">🔄</button>
+            <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
           </div>
         </div>
         
         <div class="sidepanel-tabs">
-          <button class="tab-btn ${currentView === 'chat' ? 'active' : ''}" data-view="chat">💬 聊天</button>
-          <button class="tab-btn ${currentView === 'analysis' ? 'active' : ''}" data-view="analysis">📊 分析</button>
-          <button class="tab-btn ${currentView === 'comparison' ? 'active' : ''}" data-view="comparison">🔍 比价</button>
-          <button class="tab-btn ${currentView === 'tracker' ? 'active' : ''}" data-view="tracker">📈 追踪</button>
+          <button class="tab-btn ${currentView === 'chat' ? 'active' : ''}" data-view="chat">💬 Chat</button>
+          <button class="tab-btn ${currentView === 'analysis' ? 'active' : ''}" data-view="analysis">📊 Analysis</button>
+          <button class="tab-btn ${currentView === 'comparison' ? 'active' : ''}" data-view="comparison">🔍 Compare</button>
+          <button class="tab-btn ${currentView === 'tracker' ? 'active' : ''}" data-view="tracker">📈 Tracker</button>
         </div>
         
         <div class="sidepanel-content">
@@ -175,7 +195,7 @@
       </div>
     `;
     
-    // 绑定事件
+    // Bind events
     setupEventListeners();
   }
   
@@ -199,10 +219,10 @@
       <div class="view-container chat-view">
         ${currentProduct ? `
           <div class="current-product-card">
-            <h3>当前商品</h3>
+            <h3>Current Product</h3>
             <div class="product-info">
-              <div class="product-name">${currentProduct.name || '未知商品'}</div>
-              <div class="product-price">¥${currentProduct.price || '0.00'}</div>
+              <div class="product-name">${currentProduct.name || 'Unknown Product'}</div>
+              <div class="product-price">${formatPrice(currentProduct.price || 0, currentProduct.currency || 'CNY')}</div>
             </div>
           </div>
         ` : ''}
@@ -210,14 +230,14 @@
         <div class="chat-messages" id="chat-messages">
           <div class="message assistant">
             <div class="message-content">
-              您好！我是您的智能购物助手，有什么可以帮您的吗？
+              Hello! I'm your smart shopping assistant. How can I help you?
             </div>
           </div>
         </div>
         
         <div class="chat-input-container">
-          <textarea id="chat-input" placeholder="输入您的问题..." rows="3"></textarea>
-          <button id="send-btn" class="send-btn">发送</button>
+          <textarea id="chat-input" placeholder="Enter your question..." rows="3"></textarea>
+          <button id="send-btn" class="send-btn">Send</button>
         </div>
       </div>
     `;
@@ -227,7 +247,7 @@
     if (!currentProduct) {
       return `
         <div class="empty-state">
-          <p>请先访问一个商品页面</p>
+          <p>Please visit a product page first</p>
         </div>
       `;
     }
@@ -235,25 +255,25 @@
     return `
       <div class="view-container analysis-view">
         <div class="analysis-card">
-          <h3>商品信息</h3>
+          <h3>Product Information</h3>
           <div class="info-item">
-            <label>商品名称：</label>
-            <span>${currentProduct.name || '未知'}</span>
+            <label>Product Name:</label>
+            <span>${currentProduct.name || 'Unknown'}</span>
           </div>
           <div class="info-item">
-            <label>当前价格：</label>
-            <span class="price">¥${currentProduct.price || '0.00'}</span>
+            <label>Current Price:</label>
+            <span class="price">${formatPrice(currentProduct.price || 0, currentProduct.currency || 'CNY')}</span>
           </div>
           <div class="info-item">
-            <label>平台：</label>
-            <span>${currentProduct.platform || '未知'}</span>
+            <label>Platform:</label>
+            <span>${currentProduct.platform || 'Unknown'}</span>
           </div>
         </div>
         
         <div class="analysis-actions">
-          <button id="analyze-btn" class="action-button primary">分析商品</button>
-          <button id="risk-btn" class="action-button secondary">风险分析</button>
-          <button id="predict-btn" class="action-button secondary">价格预测</button>
+          <button id="analyze-btn" class="action-button primary">Analyze Product</button>
+          <button id="risk-btn" class="action-button secondary">Risk Analysis</button>
+          <button id="predict-btn" class="action-button secondary">Price Prediction</button>
         </div>
         
         <div id="analysis-result" class="analysis-result"></div>
@@ -265,8 +285,8 @@
     return `
       <div class="view-container comparison-view">
         <div class="comparison-form">
-          <input type="text" id="product-search" placeholder="输入商品名称搜索..." />
-          <button id="search-btn" class="search-btn">搜索</button>
+          <input type="text" id="product-search" placeholder="Enter product name to search..." />
+          <button id="search-btn" class="search-btn">Search</button>
         </div>
         
         <div id="comparison-results" class="comparison-results"></div>
@@ -278,8 +298,8 @@
     return `
       <div class="view-container tracker-view">
         <div class="tracker-form">
-          <input type="number" id="target-price" placeholder="目标价格" />
-          <button id="track-btn" class="track-btn">开始追踪</button>
+          <input type="number" id="target-price" placeholder="Target Price" />
+          <button id="track-btn" class="track-btn">Start Tracking</button>
         </div>
         
         <div id="tracker-list" class="tracker-list"></div>
@@ -288,21 +308,21 @@
   }
   
   function setupEventListeners() {
-    // 标签切换
+    // Tab switching
     const tabButtons = document.querySelectorAll('.tab-btn');
     if (tabButtons.length > 0) {
       tabButtons.forEach(btn => {
-        // 移除旧的监听器（如果存在）
+        // Remove old listeners (if they exist)
         const newBtn = btn.cloneNode(true);
         btn.parentNode.replaceChild(newBtn, btn);
         
         newBtn.addEventListener('click', () => {
-          console.log('切换到视图:', newBtn.dataset.view);
+          console.log('Switching to view:', newBtn.dataset.view);
           document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
           newBtn.classList.add('active');
           currentView = newBtn.dataset.view;
           
-          // 重新渲染内容
+          // Re-render content
           const content = document.querySelector('.sidepanel-content');
           if (content) {
             content.innerHTML = renderCurrentView();
@@ -312,7 +332,7 @@
       });
     }
     
-    // 刷新按钮
+    // Refresh button
     const refreshBtn = document.getElementById('refresh-btn');
     if (refreshBtn) {
       refreshBtn.addEventListener('click', async () => {
@@ -325,7 +345,7 @@
       });
     }
     
-    // 设置视图特定的事件监听器
+    // Setup view-specific event listeners
     setupViewEventListeners();
   }
   
@@ -339,29 +359,29 @@
           const message = chatInput.value.trim();
           if (!message) return;
           
-          // 显示用户消息
+          // Display user message
           addChatMessage('user', message);
           chatInput.value = '';
           
-          // 发送到API
+          // Send to API
           try {
             const response = await window.apiClient.sendChatMessage(message, null, {
               message_type: 'text',
               model: 'glm-4-0520',
-              use_memory: true,  // 启用记忆功能，让agent记住用户偏好
+              use_memory: true,  // Enable memory function, let agent remember user preferences
               use_rag: false
             });
-            addChatMessage('assistant', response.response || '抱歉，我无法回答您的问题。');
+            addChatMessage('assistant', response.response || 'Sorry, I cannot answer your question.');
           } catch (error) {
-            console.error('发送消息失败:', error);
-            let errorMessage = '抱歉，连接失败，请检查网络连接。';
+            console.error('Failed to send message:', error);
+            let errorMessage = 'Sorry, connection failed. Please check your network connection.';
             if (error.message) {
-              if (error.message.includes('无法连接到服务器')) {
-                errorMessage = '无法连接到后端服务。请确保后端服务正在运行在 http://localhost:8000';
+              if (error.message.includes('Failed to connect') || error.message.includes('Failed to connect to server')) {
+                errorMessage = 'Failed to connect to backend service. Please ensure the backend service is running at http://localhost:8000';
               } else if (error.message.includes('LLM')) {
-                errorMessage = 'AI服务错误：' + error.message.substring(0, 100);
+                errorMessage = 'AI service error: ' + error.message.substring(0, 100);
               } else {
-                errorMessage = '错误：' + error.message.substring(0, 100);
+                errorMessage = 'Error: ' + error.message.substring(0, 100);
               }
             }
             addChatMessage('assistant', errorMessage);
@@ -383,16 +403,16 @@
       
       if (analyzeBtn && currentProduct) {
         analyzeBtn.addEventListener('click', async () => {
-          console.log('分析按钮被点击，当前商品:', currentProduct);
+          console.log('Analyze button clicked, current product:', currentProduct);
           
-          // 验证商品信息
+          // Validate product information
           if (!currentProduct.name && !currentProduct.title) {
             const resultDiv = document.getElementById('analysis-result');
             resultDiv.innerHTML = `
               <div class="error">
-                <p>❌ 无法分析：商品信息不完整</p>
+                <p>❌ Unable to analyze: Product information incomplete</p>
                 <p style="font-size: 0.8em; color: #666; margin-top: 10px;">
-                  请确保在商品详情页面，或手动输入商品信息
+                  Please ensure you are on a product detail page, or manually enter product information
                 </p>
               </div>
             `;
@@ -400,12 +420,12 @@
           }
           
           analyzeBtn.disabled = true;
-          analyzeBtn.textContent = '分析中...';
+          analyzeBtn.textContent = 'Analyzing...';
           const resultDiv = document.getElementById('analysis-result');
-          resultDiv.innerHTML = '<div class="loading">正在分析商品，请稍候...</div>';
+          resultDiv.innerHTML = '<div class="loading">Analyzing product, please wait...</div>';
           
           try {
-            // 确保商品数据格式正确
+            // Ensure product data format is correct
             const productDataToSend = {
               name: currentProduct.name || currentProduct.title || '',
               price: currentProduct.price || 0,
@@ -417,40 +437,40 @@
               parameters: currentProduct.parameters || {}
             };
             
-            console.log('发送分析请求，商品数据:', productDataToSend);
+            console.log('Sending analysis request, product data:', productDataToSend);
             
             const result = await window.apiClient.analyzeProduct(productDataToSend);
-            console.log('收到分析结果:', result);
+            console.log('Received analysis result:', result);
             
             const analysis = result.data || result;
             
             if (!analysis || (analysis.error && !analysis.comprehensive_analysis)) {
-              throw new Error(analysis?.error || '分析失败：未返回有效结果');
+              throw new Error(analysis?.error || 'Analysis failed: No valid result returned');
             }
             
             resultDiv.innerHTML = `
               <div class="result-content">
-                <h4>📊 综合分析</h4>
-                <div class="analysis-text">${formatAnalysisText(analysis.comprehensive_analysis || analysis.analysis || '分析完成，但未生成详细报告')}</div>
+                <h4>📊 Comprehensive Analysis</h4>
+                <div class="analysis-text">${formatAnalysisText(analysis.comprehensive_analysis || analysis.analysis || 'Analysis completed but no detailed report generated')}</div>
                 
                 ${analysis.recommendation ? `
                   <div class="recommendation">
-                    <h5>💡 购买建议</h5>
-                    <p><strong>行动：</strong>${getActionText(analysis.recommendation.action)}</p>
-                    <p><strong>置信度：</strong>${(analysis.recommendation.confidence * 100).toFixed(0)}%</p>
-                    ${analysis.recommendation.reason ? `<p><strong>原因：</strong>${analysis.recommendation.reason}</p>` : ''}
+                    <h5>💡 Purchase Recommendation</h5>
+                    <p><strong>Action:</strong>${getActionText(analysis.recommendation.action)}</p>
+                    <p><strong>Confidence:</strong>${(analysis.recommendation.confidence * 100).toFixed(0)}%</p>
+                    ${analysis.recommendation.reason ? `<p><strong>Reason:</strong>${analysis.recommendation.reason}</p>` : ''}
                   </div>
                 ` : ''}
                 
                 ${analysis.price_analysis && !analysis.price_analysis.error ? `
                   <div class="price-analysis">
-                    <h5>💰 价格分析</h5>
-                    <p>当前价格：¥${analysis.price_analysis.current_price || currentProduct.price || '0.00'}</p>
-                    <p>平台：${analysis.price_analysis.platform || currentProduct.platform || '未知'}</p>
+                    <h5>💰 Price Analysis</h5>
+                    <p>Current Price: ${formatPrice(analysis.price_analysis.current_price || currentProduct.price || 0, currentProduct.currency || 'CNY')}</p>
+                    <p>Platform: ${analysis.price_analysis.platform || currentProduct.platform || 'Unknown'}</p>
                     ${analysis.price_analysis.lowest_found_price ? `
-                      <p>最低价格：¥${analysis.price_analysis.lowest_found_price}</p>
+                      <p>Lowest Price: ${formatPrice(analysis.price_analysis.lowest_found_price, 'CNY')}</p>
                       ${analysis.price_analysis.savings_potential > 0 ? `
-                        <p class="savings">可节省：¥${analysis.price_analysis.savings_potential.toFixed(2)}</p>
+                        <p class="savings">Potential Savings: ${formatPrice(analysis.price_analysis.savings_potential, 'CNY')}</p>
                       ` : ''}
                     ` : ''}
                   </div>
@@ -458,16 +478,16 @@
                 
                 ${analysis.risk_analysis && !analysis.risk_analysis.error ? `
                   <div class="risk-analysis">
-                    <h5>⚠️ 风险评估</h5>
-                    <p>风险等级：<span class="risk-level risk-${analysis.risk_analysis.overall_risk_level || 'unknown'}">${getRiskLevelText(analysis.risk_analysis.overall_risk_level || 'unknown')}</span></p>
-                    <p>发现风险数：${analysis.risk_analysis.risk_count || 0}</p>
+                    <h5>⚠️ Risk Assessment</h5>
+                    <p>Risk Level: <span class="risk-level risk-${analysis.risk_analysis.overall_risk_level || 'unknown'}">${getRiskLevelText(analysis.risk_analysis.overall_risk_level || 'unknown')}</span></p>
+                    <p>Risks Found: ${analysis.risk_analysis.risk_count || 0}</p>
                   </div>
                 ` : ''}
               </div>
             `;
           } catch (error) {
             console.error('Analysis error:', error);
-            let errorMsg = '未知错误';
+            let errorMsg = 'Unknown error';
             if (error && typeof error === 'object') {
               if (error.message) {
                 errorMsg = error.message;
@@ -484,27 +504,27 @@
             
             resultDiv.innerHTML = `
               <div class="error">
-                <p>❌ 分析失败：${errorMsg}</p>
+                <p>❌ Analysis failed: ${errorMsg}</p>
                 <p style="font-size: 0.8em; color: #666; margin-top: 10px;">
-                  请确保后端服务正在运行在 http://localhost:8000<br>
-                  如果问题持续，请检查浏览器控制台和后端日志
+                  Please ensure the backend service is running at http://localhost:8000<br>
+                  If the problem persists, please check the browser console and backend logs
                 </p>
               </div>
             `;
           } finally {
             analyzeBtn.disabled = false;
-            analyzeBtn.textContent = '分析商品';
+            analyzeBtn.textContent = 'Analyze Product';
           }
         });
       } else if (analyzeBtn && !currentProduct) {
-        // 如果按钮存在但没有商品信息，显示提示
+        // If button exists but no product information, show prompt
         analyzeBtn.addEventListener('click', () => {
           const resultDiv = document.getElementById('analysis-result');
           resultDiv.innerHTML = `
             <div class="error">
-              <p>❌ 无法分析：未检测到商品信息</p>
+              <p>❌ Unable to analyze: Product information not detected</p>
               <p style="font-size: 0.8em; color: #666; margin-top: 10px;">
-                请确保在商品详情页面，或刷新页面后重试
+                Please ensure you are on a product detail page, or refresh the page and try again
               </p>
             </div>
           `;
@@ -514,9 +534,9 @@
       if (riskBtn && currentProduct) {
         riskBtn.addEventListener('click', async () => {
           riskBtn.disabled = true;
-          riskBtn.textContent = '分析中...';
+          riskBtn.textContent = 'Analyzing...';
           const resultDiv = document.getElementById('analysis-result');
-          resultDiv.innerHTML = '<div class="loading">正在进行风险评估...</div>';
+          resultDiv.innerHTML = '<div class="loading">Performing risk assessment...</div>';
           
           try {
             const result = await window.apiClient.analyzeProduct(currentProduct);
@@ -525,27 +545,27 @@
             if (riskAnalysis && !riskAnalysis.error) {
               resultDiv.innerHTML = `
                 <div class="result-content">
-                  <h4>⚠️ 风险评估报告</h4>
+                  <h4>⚠️ Risk Assessment Report</h4>
                   <div class="risk-level-badge risk-${riskAnalysis.overall_risk_level || 'unknown'}">
                     ${getRiskLevelText(riskAnalysis.overall_risk_level || 'unknown')}
                   </div>
                   
                   ${riskAnalysis.detailed_risks && riskAnalysis.detailed_risks.length > 0 ? `
                     <div class="risks-list">
-                      <h5>发现的风险：</h5>
+                      <h5>Risks Found:</h5>
                       ${riskAnalysis.detailed_risks.map(risk => `
                         <div class="risk-item">
-                          <strong>${risk.risk_type || '未知类型'}</strong>
-                          <p>${risk.evidence || '无详细信息'}</p>
-                          <span class="severity">严重程度：${((risk.severity || 0) * 100).toFixed(0)}%</span>
+                          <strong>${risk.risk_type || 'Unknown Type'}</strong>
+                          <p>${risk.evidence || 'No detailed information'}</p>
+                          <span class="severity">Severity: ${((risk.severity || 0) * 100).toFixed(0)}%</span>
                         </div>
                       `).join('')}
                     </div>
-                  ` : '<p>未发现明显风险</p>'}
+                  ` : '<p>No significant risks found</p>'}
                   
                   ${riskAnalysis.mitigation_suggestions && riskAnalysis.mitigation_suggestions.length > 0 ? `
                     <div class="suggestions">
-                      <h5>💡 建议：</h5>
+                      <h5>💡 Suggestions:</h5>
                       <ul>
                         ${riskAnalysis.mitigation_suggestions.map(s => `<li>${s}</li>`).join('')}
                       </ul>
@@ -554,14 +574,14 @@
                 </div>
               `;
             } else {
-              resultDiv.innerHTML = '<div class="error">风险评估失败或未发现风险</div>';
+              resultDiv.innerHTML = '<div class="error">Risk assessment failed or no risks found</div>';
             }
           } catch (error) {
             console.error('Risk analysis error:', error);
-            resultDiv.innerHTML = `<div class="error">❌ 风险评估失败：${error.message || '未知错误'}</div>`;
+            resultDiv.innerHTML = `<div class="error">❌ Risk assessment failed: ${error.message || 'Unknown error'}</div>`;
           } finally {
             riskBtn.disabled = false;
-            riskBtn.textContent = '风险分析';
+            riskBtn.textContent = 'Risk Analysis';
           }
         });
       }
@@ -569,28 +589,28 @@
       if (predictBtn && currentProduct) {
         predictBtn.addEventListener('click', async () => {
           predictBtn.disabled = true;
-          predictBtn.textContent = '预测中...';
+          predictBtn.textContent = 'Predicting...';
           const resultDiv = document.getElementById('analysis-result');
-          resultDiv.innerHTML = '<div class="loading">正在进行价格预测...</div>';
+          resultDiv.innerHTML = '<div class="loading">Performing price prediction...</div>';
           
           try {
             if (currentProduct.productId) {
               const result = await window.apiClient.predictPrice(currentProduct.productId);
               resultDiv.innerHTML = `
                 <div class="result-content">
-                  <h4>📈 价格预测</h4>
+                  <h4>📈 Price Prediction</h4>
                   <pre>${JSON.stringify(result, null, 2)}</pre>
                 </div>
               `;
             } else {
-              resultDiv.innerHTML = '<div class="error">无法进行价格预测：商品ID缺失</div>';
+              resultDiv.innerHTML = '<div class="error">Unable to predict price: Product ID missing</div>';
             }
           } catch (error) {
             console.error('Price prediction error:', error);
-            resultDiv.innerHTML = `<div class="error">❌ 价格预测失败：${error.message || '未知错误'}</div>`;
+            resultDiv.innerHTML = `<div class="error">❌ Price prediction failed: ${error.message || 'Unknown error'}</div>`;
           } finally {
             predictBtn.disabled = false;
-            predictBtn.textContent = '价格预测';
+            predictBtn.textContent = 'Price Prediction';
           }
         });
       }
@@ -602,27 +622,27 @@
         const performComparison = async () => {
           const query = productSearch.value.trim();
           if (!query) {
-            alert('请输入商品名称');
+            alert('Please enter a product name');
             return;
           }
           
           searchBtn.disabled = true;
-          searchBtn.textContent = '搜索中...';
+          searchBtn.textContent = 'Searching...';
           const resultsDiv = document.getElementById('comparison-results');
-          resultsDiv.innerHTML = '<div class="loading">正在搜索并比较价格...</div>';
+          resultsDiv.innerHTML = '<div class="loading">Searching and comparing prices...</div>';
           
           try {
             const result = await window.apiClient.comparePrices(query);
-            console.log('比价结果:', result);
+            console.log('Price comparison result:', result);
             
-            // 处理不同的返回格式
+            // Handle different return formats
             let comparison = result.comparison || result.data?.comparison || {};
             const totalProducts = result.total_products || 0;
             const message = result.message || '';
             const dataSource = result.data_source || 'unknown';
             
             if (Object.keys(comparison).length > 0) {
-              // 检查是否是all_products格式
+              // Check if it's all_products format
               if (comparison.all_products) {
                 const allProducts = comparison.all_products;
                 const platformPrices = allProducts.platform_prices || {};
@@ -630,20 +650,20 @@
                 
                 resultsDiv.innerHTML = `
                   <div class="comparison-results-content">
-                    <h4>💰 价格比较结果</h4>
-                    <p style="font-size: 0.9em; color: #666;">数据来源: ${dataSource === 'database' ? '数据库' : 'API'} | 找到 ${totalProducts} 个商品</p>
+                    <h4>💰 Price Comparison Results</h4>
+                    <p style="font-size: 0.9em; color: #666;">Data Source: ${dataSource === 'database' ? 'Database' : 'API'} | Found ${totalProducts} products</p>
                     ${Object.entries(platformPrices).map(([platform, platformProducts]) => {
                       if (Array.isArray(platformProducts)) {
                         return `
                           <div class="comparison-group">
-                            <h5>${platform.toUpperCase()} 平台</h5>
+                            <h5>${platform.toUpperCase()} Platform</h5>
                             <div class="products-list">
                               ${platformProducts.map(p => `
                                 <div class="product-item">
-                                  <strong>${p.title || p.name || '未知商品'}</strong>
-                                  <span class="price">¥${p.price || 'N/A'}</span>
+                                  <strong>${p.title || p.name || 'Unknown Product'}</strong>
+                                  <span class="price">${formatPrice(p.price || 0, p.currency || 'CNY')}</span>
                                   ${p.product_id ? `<span class="product-id">ID: ${p.product_id}</span>` : ''}
-                                  ${p.product_url ? `<a href="${p.product_url}" target="_blank" class="product-link">查看商品</a>` : ''}
+                                  ${p.product_url ? `<a href="${p.product_url}" target="_blank" class="product-link">View Product</a>` : ''}
                                 </div>
                               `).join('')}
                             </div>
@@ -652,11 +672,11 @@
                       } else {
                         return `
                           <div class="comparison-group">
-                            <h5>${platform.toUpperCase()} 平台</h5>
+                            <h5>${platform.toUpperCase()} Platform</h5>
                             <div class="price-comparison">
-                              <p>价格：¥${platformProducts.price || 'N/A'}</p>
+                              <p>Price: ${formatPrice(platformProducts.price || 0, platformProducts.currency || 'CNY')}</p>
                               <p>${platformProducts.title || ''}</p>
-                              ${platformProducts.product_url ? `<a href="${platformProducts.product_url}" target="_blank">查看商品</a>` : ''}
+                              ${platformProducts.product_url ? `<a href="${platformProducts.product_url}" target="_blank">View Product</a>` : ''}
                             </div>
                           </div>
                         `;
@@ -665,36 +685,36 @@
                   </div>
                 `;
               } else {
-                // 标准格式 - 有商品组
+                // Standard format - has product groups
                 resultsDiv.innerHTML = `
                   <div class="comparison-results-content">
-                    <h4>💰 价格比较结果</h4>
-                    <p style="font-size: 0.9em; color: #666;">找到 ${totalProducts} 个商品 | 数据来源: ${dataSource === 'database' ? '数据库' : 'API'}</p>
+                    <h4>💰 Price Comparison Results</h4>
+                    <p style="font-size: 0.9em; color: #666;">Found ${totalProducts} products | Data Source: ${dataSource === 'database' ? 'Database' : 'API'}</p>
                     ${Object.entries(comparison).map(([productKey, data]) => {
-                      // 处理不同的数据格式
+                      // Handle different data formats
                       const products = data.products || [];
                       const platformPrices = data.platform_prices || {};
                       
-                      // 如果有platform_prices，优先使用
+                      // If platform_prices exists, use it first
                       if (platformPrices && Object.keys(platformPrices).length > 0) {
                         return `
                           <div class="comparison-group">
                             <h5>${productKey}</h5>
                             <div class="price-comparison">
-                              ${data.min_price ? `<p><strong>最低价：</strong>¥${data.min_price}</p>` : ''}
-                              ${data.max_price ? `<p><strong>最高价：</strong>¥${data.max_price}</p>` : ''}
-                              ${data.price_diff ? `<p><strong>价格差：</strong>¥${data.price_diff.toFixed(2)}</p>` : ''}
-                              ${data.price_diff_percent ? `<p><strong>节省：</strong>${data.price_diff_percent.toFixed(1)}%</p>` : ''}
-                              ${data.best_platform ? `<p><strong>最佳平台：</strong>${data.best_platform}</p>` : ''}
+                              ${data.min_price ? `<p><strong>Lowest Price:</strong> ${formatPrice(data.min_price, 'CNY')}</p>` : ''}
+                              ${data.max_price ? `<p><strong>Highest Price:</strong> ${formatPrice(data.max_price, 'CNY')}</p>` : ''}
+                              ${data.price_diff ? `<p><strong>Price Difference:</strong> ${formatPrice(data.price_diff, 'CNY')}</p>` : ''}
+                              ${data.price_diff_percent ? `<p><strong>Savings:</strong> ${data.price_diff_percent.toFixed(1)}%</p>` : ''}
+                              ${data.best_platform ? `<p><strong>Best Platform:</strong> ${data.best_platform}</p>` : ''}
                             </div>
                             <div class="platform-prices">
                               ${Object.entries(platformPrices).map(([platform, info]) => `
                                 <div class="platform-price-item ${platform === data.best_platform ? 'best-price' : ''}">
                                   <span class="platform-badge platform-${platform}">${platform.toUpperCase()}</span>
-                                  <span class="price">¥${info.price || 'N/A'}</span>
+                                  <span class="price">${formatPrice(info.price || 0, info.currency || 'CNY')}</span>
                                   <div class="product-info">
                                     <div class="product-title">${info.title || ''}</div>
-                                    ${info.product_url ? `<a href="${info.product_url}" target="_blank" class="product-link">查看商品</a>` : ''}
+                                    ${info.product_url ? `<a href="${info.product_url}" target="_blank" class="product-link">View Product</a>` : ''}
                                   </div>
                                 </div>
                               `).join('')}
@@ -702,36 +722,36 @@
                           </div>
                         `;
                       } else if (products.length > 0) {
-                        // 回退到products列表
+                        // Fallback to products list
                         return `
                           <div class="comparison-group">
                             <h5>${productKey}</h5>
                             <div class="price-comparison">
-                              ${data.min_price ? `<p><strong>最低价：</strong>¥${data.min_price}</p>` : ''}
-                              ${data.max_price ? `<p><strong>最高价：</strong>¥${data.max_price}</p>` : ''}
-                              ${data.price_difference ? `<p><strong>价格差：</strong>¥${data.price_difference}</p>` : ''}
-                              ${data.savings_percentage ? `<p><strong>节省：</strong>${data.savings_percentage.toFixed(1)}%</p>` : ''}
-                              ${data.best_platform ? `<p><strong>最佳平台：</strong>${data.best_platform}</p>` : ''}
+                              ${data.min_price ? `<p><strong>Lowest Price:</strong> ${formatPrice(data.min_price, 'CNY')}</p>` : ''}
+                              ${data.max_price ? `<p><strong>Highest Price:</strong> ${formatPrice(data.max_price, 'CNY')}</p>` : ''}
+                              ${data.price_difference ? `<p><strong>Price Difference:</strong> ${formatPrice(data.price_difference, 'CNY')}</p>` : ''}
+                              ${data.savings_percentage ? `<p><strong>Savings:</strong> ${data.savings_percentage.toFixed(1)}%</p>` : ''}
+                              ${data.best_platform ? `<p><strong>Best Platform:</strong> ${data.best_platform}</p>` : ''}
                             </div>
                             <div class="products-list">
                               ${products.map(p => `
                                 <div class="product-item">
                                   <strong>${p.title || p.name || productKey}</strong>
-                                  <span class="platform-badge platform-${p.platform}">${p.platform || '未知'}</span>
-                                  <span class="price">¥${p.price || 'N/A'}</span>
-                                  ${p.product_url ? `<a href="${p.product_url}" target="_blank" class="product-link">查看</a>` : ''}
+                                  <span class="platform-badge platform-${p.platform}">${p.platform || 'Unknown'}</span>
+                                  <span class="price">${formatPrice(p.price || 0, p.currency || 'CNY')}</span>
+                                  ${p.product_url ? `<a href="${p.product_url}" target="_blank" class="product-link">View</a>` : ''}
                                 </div>
                               `).join('')}
                             </div>
                           </div>
                         `;
                       } else {
-                        // 只有基本信息
+                        // Only basic information
                         return `
                           <div class="comparison-group">
                             <h5>${productKey}</h5>
-                            <p>商品数量: ${data.product_count || 0}</p>
-                            <p>平台: ${(data.platforms || []).join(', ')}</p>
+                            <p>Product Count: ${data.product_count || 0}</p>
+                            <p>Platforms: ${(data.platforms || []).join(', ')}</p>
                           </div>
                         `;
                       }
@@ -740,19 +760,19 @@
                 `;
               }
             } else {
-              // 没有找到结果
-              let errorMsg = message || '未找到价格比较结果';
+              // No results found
+              let errorMsg = message || 'No price comparison results found';
               if (totalProducts > 0) {
-                errorMsg = `找到 ${totalProducts} 个商品，但无法进行价格对比。${message || '请尝试使用更具体的关键词。'}`;
+                errorMsg = `Found ${totalProducts} products, but unable to perform price comparison. ${message || 'Please try using more specific keywords.'}`;
               } else {
-                errorMsg = `${message || '未找到价格比较结果。请确保已上传商品数据到数据库，或尝试使用更具体的关键词。'}`;
+                errorMsg = `${message || 'No price comparison results found. Please ensure product data has been uploaded to the database, or try using more specific keywords.'}`;
               }
               resultsDiv.innerHTML = `<div class="error">${errorMsg}</div>`;
             }
           } catch (error) {
             console.error('Comparison error:', error);
-            // 更好的错误处理
-            let errorMessage = '未知错误';
+            // Better error handling
+            let errorMessage = 'Unknown error';
             if (error && typeof error === 'object') {
               if (error.message) {
                 errorMessage = error.message;
@@ -766,10 +786,10 @@
             } else if (typeof error === 'string') {
               errorMessage = error;
             }
-            resultsDiv.innerHTML = `<div class="error">❌ 价格比较失败：${errorMessage}</div>`;
+            resultsDiv.innerHTML = `<div class="error">❌ Price comparison failed: ${errorMessage}</div>`;
           } finally {
             searchBtn.disabled = false;
-            searchBtn.textContent = '搜索';
+            searchBtn.textContent = 'Search';
           }
         };
         
@@ -788,37 +808,37 @@
         trackBtn.addEventListener('click', async () => {
           const targetPrice = parseFloat(targetPriceInput.value);
           if (!targetPrice || targetPrice <= 0) {
-            alert('请输入有效的目标价格');
+            alert('Please enter a valid target price');
             return;
           }
           
           if (!currentProduct.productId) {
-            alert('无法追踪：商品ID缺失');
+            alert('Unable to track: Product ID missing');
             return;
           }
           
           trackBtn.disabled = true;
-          trackBtn.textContent = '设置中...';
+          trackBtn.textContent = 'Setting...';
           
           try {
             const result = await window.apiClient.trackPrice(currentProduct.productId, targetPrice);
-            alert('价格追踪已设置！');
+            alert('Price tracking has been set!');
             
-            // 刷新追踪列表
+            // Refresh tracker list
             const trackerList = document.getElementById('tracker-list');
             trackerList.innerHTML = `
               <div class="tracker-item">
-                <strong>${currentProduct.name || '未知商品'}</strong>
-                <p>目标价格：¥${targetPrice}</p>
-                <p>当前价格：¥${currentProduct.price || 'N/A'}</p>
+                <strong>${currentProduct.name || 'Unknown Product'}</strong>
+                <p>Target Price: ${formatPrice(targetPrice, currentProduct.currency || 'CNY')}</p>
+                <p>Current Price: ${formatPrice(currentProduct.price || 0, currentProduct.currency || 'CNY')}</p>
               </div>
             `;
           } catch (error) {
             console.error('Track price error:', error);
-            alert('设置价格追踪失败：' + (error.message || '未知错误'));
+            alert('Failed to set price tracking: ' + (error.message || 'Unknown error'));
           } finally {
             trackBtn.disabled = false;
-            trackBtn.textContent = '开始追踪';
+            trackBtn.textContent = 'Start Tracking';
           }
         });
       }
@@ -839,10 +859,10 @@
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }
   
-  // 辅助函数
+  // Helper functions
   function formatAnalysisText(text) {
-    if (!text) return '暂无分析内容';
-    // 简单的文本格式化
+    if (!text) return 'No analysis content available';
+    // Simple text formatting
     return text.split('\n').map(line => {
       if (line.trim().startsWith('#') || line.trim().match(/^\d+\./)) {
         return `<strong>${line}</strong>`;
@@ -853,23 +873,23 @@
   
   function getActionText(action) {
     const actionMap = {
-      'buy_now': '✅ 立即购买',
-      'wait': '⏳ 等待降价',
-      'consider': '🤔 考虑购买',
-      'avoid': '❌ 不建议购买',
-      'neutral': '➡️ 中性',
-      'cautious': '⚠️ 谨慎考虑'
+      'buy_now': '✅ Buy Now',
+      'wait': '⏳ Wait for Price Drop',
+      'consider': '🤔 Consider Buying',
+      'avoid': '❌ Not Recommended',
+      'neutral': '➡️ Neutral',
+      'cautious': '⚠️ Consider Carefully'
     };
     return actionMap[action] || action;
   }
   
   function getRiskLevelText(level) {
     const levelMap = {
-      'low': '低风险',
-      'medium': '中风险',
-      'high': '高风险',
-      'critical': '严重风险',
-      'unknown': '未知'
+      'low': 'Low Risk',
+      'medium': 'Medium Risk',
+      'high': 'High Risk',
+      'critical': 'Critical Risk',
+      'unknown': 'Unknown'
     };
     return levelMap[level] || level;
   }

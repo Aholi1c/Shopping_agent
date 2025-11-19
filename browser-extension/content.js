@@ -1,6 +1,6 @@
 /**
  * Content Script
- * 注入到购物网站页面，提取商品信息并提供交互功能
+ * Injected into shopping website pages to extract product information and provide interactive features
  */
 
 (function() {
@@ -10,18 +10,111 @@
   let analysisResult = null;
   let assistantWidget = null;
   
-  // 初始化
+  // Currency symbol mapping
+  const currencySymbols = {
+    'CNY': '¥',
+    'HKD': 'HK$',
+    'USD': '$',
+    'EUR': '€',
+    'GBP': '£',
+    'JPY': 'JP¥',
+    'AUD': 'A$',
+    'SGD': 'S$',
+    'CAD': 'C$'
+  };
+  
+  // Currency detection pattern - improved to handle more cases
+  const currencyPattern = /(HK\$|HKD|US\$|USD|\$|¥|CNY|RMB|€|EUR|£|GBP|JP¥|JPY|A\$|AUD|S\$|SGD|C\$|CAD)/i;
+  
+  // Helper function to detect currency from text and URL
+  function detectCurrency(priceText, url = '') {
+    if (!priceText) return 'CNY'; // Default to CNY
+    
+    const currencyMatch = priceText.match(currencyPattern);
+    if (currencyMatch) {
+      const symbol = currencyMatch[1].toUpperCase();
+      
+      // Handle HK$ or HKD
+      if (symbol.includes('HK$') || symbol === 'HKD') {
+        return 'HKD';
+      }
+      
+      // Handle US$ or USD
+      if (symbol.includes('US$') || symbol === 'USD') {
+        return 'USD';
+      }
+      
+      // Handle $ - need to check URL context
+      if (symbol === '$' || symbol === 'USD') {
+        const hostname = (url || window.location.href).toLowerCase();
+        // Check for Hong Kong domains
+        if (hostname.includes('amazon.com.hk') || 
+            hostname.includes('amazon.hk') ||
+            hostname.includes('.hk/') ||
+            hostname.includes('hongkong') ||
+            hostname.includes('hktmall') ||
+            hostname.includes('hk.') ||
+            hostname.includes('.com.hk')) {
+          return 'HKD';
+        }
+        // Check for other USD domains
+        if (hostname.includes('amazon.com') && !hostname.includes('amazon.cn') && !hostname.includes('amazon.co.uk')) {
+          return 'USD';
+        }
+        // Default to USD for $ symbol
+        return 'USD';
+      }
+      
+      // Handle ¥ - could be CNY or JPY
+      if (symbol === '¥' || symbol === 'CNY' || symbol === 'RMB') {
+        const hostname = (url || window.location.href).toLowerCase();
+        if (hostname.includes('.jp') || hostname.includes('japan')) {
+          return 'JPY';
+        }
+        return 'CNY';
+      }
+      
+      // Handle JP¥ or JPY
+      if (symbol.includes('JP¥') || symbol === 'JPY') {
+        return 'JPY';
+      }
+      
+      // Handle other currencies
+      if (symbol.includes('€') || symbol === 'EUR') return 'EUR';
+      if (symbol.includes('£') || symbol === 'GBP') return 'GBP';
+      if (symbol.includes('A$') || symbol === 'AUD') return 'AUD';
+      if (symbol.includes('S$') || symbol === 'SGD') return 'SGD';
+      if (symbol.includes('C$') || symbol === 'CAD') return 'CAD';
+    }
+    
+    // Default based on domain if no symbol found
+    const hostname = (url || window.location.href).toLowerCase();
+    if (hostname.includes('.hk') || hostname.includes('hongkong')) {
+      return 'HKD';
+    }
+    if (hostname.includes('.jp') || hostname.includes('japan')) {
+      return 'JPY';
+    }
+    if (hostname.includes('amazon.com') && !hostname.includes('amazon.cn') && !hostname.includes('amazon.co.uk')) {
+      return 'USD';
+    }
+    
+    // Default to CNY for Chinese platforms
+    return 'CNY';
+  }
+  
+  // Initialize
   init();
   
   function init() {
-    // 等待页面加载完成
+    // Wait for page to load
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', onPageReady);
     } else {
       onPageReady();
     }
     
-    // 监听来自background的消息
+    // Listen for messages from background
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.action === 'extractProductInfo') {
         extractProductInfo();
@@ -36,25 +129,25 @@
       return true;
     });
     
-    // 创建浮动助手按钮
+    // Create floating assistant button
     createFloatingButton();
   }
   
   function onPageReady() {
-    // 延迟提取，确保页面完全加载
+    // Delay extraction to ensure page is fully loaded
     setTimeout(() => {
       extractProductInfo();
     }, 1000);
   }
   
-  // 提取商品信息
+  // Extract product information
   async function extractProductInfo() {
     const url = window.location.href;
     let info = {};
     
-    console.log('开始提取商品信息，URL:', url);
+    console.log('Starting to extract product information, URL:', url);
     
-    // 根据不同的购物网站提取商品信息
+    // Extract product information based on different shopping websites
     if (url.includes('jd.com')) {
       info = extractJDProductInfo();
     } else if (url.includes('taobao.com') || url.includes('tmall.com')) {
@@ -67,7 +160,7 @@
       info = extractGenericProductInfo();
     }
     
-    console.log('提取到的商品信息:', info);
+    console.log('Extracted product information:', info);
     
     if (info.name || info.price) {
       productInfo = {
@@ -77,7 +170,7 @@
         timestamp: Date.now()
       };
       
-      // 立即保存到storage（不等待background响应）
+      // Immediately save to storage (don't wait for background response)
       try {
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tabs[0] && chrome.storage && chrome.storage.local) {
@@ -85,33 +178,33 @@
             [`product_${tabs[0].id}`]: productInfo,
             [`product_current`]: productInfo
           });
-          console.log('商品信息已直接保存到storage');
+          console.log('Product information saved directly to storage');
         }
       } catch (e) {
-        console.warn('直接保存商品信息失败:', e);
+        console.warn('Failed to save product information directly:', e);
       }
       
-      // 发送商品信息到background
+      // Send product information to background
       chrome.runtime.sendMessage({
         action: 'extractProductInfo',
         data: productInfo
       }, (response) => {
         if (chrome.runtime.lastError) {
-          console.warn('发送商品信息到background失败:', chrome.runtime.lastError);
+          console.warn('Failed to send product information to background:', chrome.runtime.lastError);
         } else {
-          console.log('商品信息已发送到background');
+          console.log('Product information sent to background');
         }
       });
     } else {
-      console.warn('未能提取到商品信息（名称或价格为空）');
+      console.warn('Unable to extract product information (name or price is empty)');
     }
   }
   
-  // 提取京东商品信息
+  // Extract JD product information
   function extractJDProductInfo() {
     const info = {};
     
-    // 商品名称 - 尝试多个选择器
+    // Product name - try multiple selectors
     const nameSelectors = [
       '.sku-name', 
       '#itemName',
@@ -130,7 +223,7 @@
       }
     }
     
-    // 商品价格 - 尝试多个选择器
+    // Product price - try multiple selectors
     const priceSelectors = [
       '.price .J-price',
       '#jd-price',
@@ -145,21 +238,8 @@
       const priceEl = document.querySelector(selector);
       if (priceEl) {
         const priceText = priceEl.textContent.trim();
-        // 检测货币（京东默认人民币，但也要支持其他货币）
-        const currencyPattern = /(HK\$|HKD|US\$|USD|\$|¥|CNY|RMB|€|EUR|£|GBP)/i;
-        const currencyMatch = priceText.match(currencyPattern);
-        if (currencyMatch) {
-          const symbol = currencyMatch[1].toUpperCase();
-          if (symbol.includes('HK$') || symbol.includes('HKD')) {
-            info.currency = 'HKD';
-          } else if (symbol.includes('$') || symbol.includes('USD')) {
-            info.currency = 'USD';
-          } else if (symbol.includes('¥') || symbol.includes('CNY') || symbol.includes('RMB')) {
-            info.currency = 'CNY';
-          }
-        } else {
-          info.currency = 'CNY'; // 京东默认人民币
-        }
+        // Detect currency using improved detection function
+        info.currency = detectCurrency(priceText, window.location.href);
         const cleanedPrice = priceText.replace(/[^\d.]/g, '');
         if (cleanedPrice) {
           info.price = parseFloat(cleanedPrice);
@@ -168,7 +248,12 @@
       }
     }
     
-    // 商品图片
+    // Ensure currency is set even if price extraction failed
+    if (!info.currency) {
+      info.currency = detectCurrency('', window.location.href);
+    }
+    
+    // Product image
     const imgSelectors = [
       '#spec-img img',
       '.main-img img',
@@ -185,11 +270,11 @@
       }
     }
     
-    // 商品ID
+    // Product ID
     const match = window.location.href.match(/(\d+)\.html/);
     if (match) info.productId = match[1];
     
-    // 商品描述 - 尝试多个选择器
+    // Product description - try multiple selectors
     const descSelectors = [
       '.parameter2',
       '.detail-content',
@@ -203,11 +288,11 @@
     for (const selector of descSelectors) {
       const descEl = document.querySelector(selector);
       if (descEl) {
-        // 获取描述文本，清理空白和换行
+        // Get description text, clean whitespace and newlines
         let descText = descEl.textContent || descEl.innerText;
         descText = descText.trim().replace(/\s+/g, ' ');
-        if (descText && descText.length > 10) {  // 确保有实际内容
-          info.description = descText.substring(0, 2000);  // 限制长度
+        if (descText && descText.length > 10) {  // Ensure there's actual content
+          info.description = descText.substring(0, 2000);  // Limit length
           break;
         }
       }
@@ -287,27 +372,19 @@
       const priceEl = document.querySelector(selector);
       if (priceEl) {
         const priceText = priceEl.textContent.trim();
-        // 检测货币（淘宝默认人民币）
-        const currencyPattern = /(HK\$|HKD|US\$|USD|\$|¥|CNY|RMB|€|EUR|£|GBP)/i;
-        const currencyMatch = priceText.match(currencyPattern);
-        if (currencyMatch) {
-          const symbol = currencyMatch[1].toUpperCase();
-          if (symbol.includes('HK$') || symbol.includes('HKD')) {
-            info.currency = 'HKD';
-          } else if (symbol.includes('$') || symbol.includes('USD')) {
-            info.currency = 'USD';
-          } else {
-            info.currency = 'CNY';
-          }
-        } else {
-          info.currency = 'CNY'; // 淘宝默认人民币
-        }
+        // Detect currency using improved detection function
+        info.currency = detectCurrency(priceText, window.location.href);
         const cleanedPrice = priceText.replace(/[^\d.]/g, '');
         if (cleanedPrice) {
           info.price = parseFloat(cleanedPrice);
           break;
         }
       }
+    }
+    
+    // Ensure currency is set even if price extraction failed
+    if (!info.currency) {
+      info.currency = detectCurrency('', window.location.href);
     }
     
     // 商品图片
@@ -423,27 +500,19 @@
       const priceEl = document.querySelector(selector);
       if (priceEl) {
         const priceText = priceEl.textContent.trim();
-        // 检测货币（拼多多默认人民币）
-        const currencyPattern = /(HK\$|HKD|US\$|USD|\$|¥|CNY|RMB|€|EUR|£|GBP)/i;
-        const currencyMatch = priceText.match(currencyPattern);
-        if (currencyMatch) {
-          const symbol = currencyMatch[1].toUpperCase();
-          if (symbol.includes('HK$') || symbol.includes('HKD')) {
-            info.currency = 'HKD';
-          } else if (symbol.includes('$') || symbol.includes('USD')) {
-            info.currency = 'USD';
-          } else {
-            info.currency = 'CNY';
-          }
-        } else {
-          info.currency = 'CNY'; // 拼多多默认人民币
-        }
+        // Detect currency using improved detection function
+        info.currency = detectCurrency(priceText, window.location.href);
         const cleanedPrice = priceText.replace(/[^\d.]/g, '');
         if (cleanedPrice) {
           info.price = parseFloat(cleanedPrice);
           break;
         }
       }
+    }
+    
+    // Ensure currency is set even if price extraction failed
+    if (!info.currency) {
+      info.currency = detectCurrency('', window.location.href);
     }
     
     // 商品描述
@@ -534,31 +603,8 @@
       'span[data-a-color="price"]'  // 通用价格span
     ];
     
-    // 货币符号映射
-    const currencySymbols = {
-      'HK$': 'HKD',
-      'HKD': 'HKD',
-      'HK$': 'HKD',
-      '$': 'USD',
-      'USD': 'USD',
-      'US$': 'USD',
-      '¥': 'CNY',
-      'CNY': 'CNY',
-      'RMB': 'CNY',
-      '€': 'EUR',
-      'EUR': 'EUR',
-      '£': 'GBP',
-      'GBP': 'GBP',
-      'JP¥': 'JPY',
-      'JPY': 'JPY',
-      'A$': 'AUD',
-      'AUD': 'AUD'
-    };
-    
-    // 检测货币符号的正则表达式
-    const currencyPattern = /(HK\$|HKD|US\$|USD|\$|¥|CNY|RMB|€|EUR|£|GBP|JP¥|JPY|A\$|AUD)/i;
-    
-    let detectedCurrency = 'CNY'; // 默认人民币
+    // Use improved currency detection
+    let detectedCurrency = detectCurrency('', window.location.href);
     
     for (const selector of priceSelectors) {
       const priceEl = document.querySelector(selector);
@@ -572,27 +618,8 @@
           priceText = priceEl.textContent.trim();
         }
         
-        // 检测货币符号
-        const currencyMatch = priceText.match(currencyPattern);
-        if (currencyMatch) {
-          const currencySymbol = currencyMatch[1].toUpperCase();
-          // 查找货币代码
-          for (const [symbol, code] of Object.entries(currencySymbols)) {
-            if (currencySymbol.includes(symbol) || symbol.includes(currencySymbol)) {
-              detectedCurrency = code;
-              break;
-            }
-          }
-          // 特殊情况：单独的$可能是USD或HKD，需要根据域名判断
-          if (currencySymbol === '$' || currencySymbol === 'USD') {
-            const hostname = window.location.hostname.toLowerCase();
-            if (hostname.includes('amazon.com.hk') || hostname.includes('amazon.hk')) {
-              detectedCurrency = 'HKD';
-            } else {
-              detectedCurrency = 'USD';
-            }
-          }
-        }
+        // Detect currency using improved detection function
+        detectedCurrency = detectCurrency(priceText, window.location.href);
         
         // 提取价格数字（支持多种格式：$19.99, 19.99, $19,99等）
         const priceMatch = priceText.match(/[\d,]+\.?\d*/);
@@ -608,29 +635,51 @@
       }
     }
     
-    // 如果还没找到价格，尝试从页面中搜索价格模式
+    // If price not found yet, try searching for price patterns in page
     if (!info.price) {
       const pricePatterns = [
         /\$\s*([\d,]+\.?\d*)/g,
         /USD\s*([\d,]+\.?\d*)/gi,
-        /([\d,]+\.?\d*)\s*USD/gi
+        /([\d,]+\.?\d*)\s*USD/gi,
+        /HK\$\s*([\d,]+\.?\d*)/gi,
+        /HKD\s*([\d,]+\.?\d*)/gi,
+        /([\d,]+\.?\d*)\s*HKD/gi,
+        /¥\s*([\d,]+\.?\d*)/g,
+        /CNY\s*([\d,]+\.?\d*)/gi,
+        /([\d,]+\.?\d*)\s*CNY/gi
       ];
       
       for (const pattern of pricePatterns) {
         const matches = document.body.innerText.match(pattern);
         if (matches && matches.length > 0) {
-          // 取第一个匹配的价格
+          // Take first matching price
           const priceMatch = matches[0].match(/[\d,]+\.?\d*/);
           if (priceMatch) {
             const cleanedPrice = priceMatch[0].replace(/,/g, '');
             const price = parseFloat(cleanedPrice);
-            if (price && price > 0 && price < 100000) { // 合理价格范围
+            if (price && price > 0 && price < 100000) { // Reasonable price range
               info.price = price;
+              // Detect currency from the matched pattern
+              const matchText = matches[0];
+              if (matchText.includes('HK$') || matchText.includes('HKD')) {
+                info.currency = 'HKD';
+              } else if (matchText.includes('$') || matchText.includes('USD')) {
+                info.currency = 'USD';
+              } else if (matchText.includes('¥') || matchText.includes('CNY')) {
+                info.currency = 'CNY';
+              } else {
+                info.currency = detectedCurrency;
+              }
               break;
             }
           }
         }
       }
+    }
+    
+    // Ensure currency is set
+    if (!info.currency) {
+      info.currency = detectedCurrency;
     }
     
     // 商品图片
@@ -744,7 +793,7 @@
       }
     }
     
-    console.log('Amazon商品信息提取完成:', info);
+    console.log('Amazon product information extraction completed:', info);
     return info;
   }
   
@@ -857,7 +906,7 @@
         <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z" fill="currentColor"/>
       </svg>
     `;
-    button.title = '智能购物助手';
+    button.title = 'Smart Shopping Assistant';
     button.addEventListener('click', () => {
       chrome.runtime.sendMessage({ action: 'openSidePanel' });
     });
@@ -892,12 +941,12 @@
     document.body.appendChild(button);
   }
   
-  // 显示分析结果
+  // Show analysis result
   function showAnalysis(data) {
     analysisResult = data;
     
-    // 可以在这里在页面上显示分析结果提示
-    // 例如：显示一个通知卡片
+    // Can display analysis result prompt on the page here
+    // For example: show a notification card
     if (assistantWidget) {
       assistantWidget.updateAnalysis(data);
     }
@@ -922,45 +971,45 @@
       await extractProductInfo();
     }
     
-    // 再次检查
+    // Check again
     if (!productInfo || (!productInfo.name && !productInfo.price)) {
-      console.error('仍然无法提取商品信息');
-      showNotification('未能提取商品信息，请确保在商品详情页', 'error');
+      console.error('Still unable to extract product information');
+      showNotification('Unable to extract product information, please ensure you are on a product detail page', 'error');
       
-      // 最后一次尝试：等待更长时间（可能是动态加载的页面）
+      // Last attempt: wait longer (may be dynamically loaded page)
       await new Promise(resolve => setTimeout(resolve, 2000));
       await extractProductInfo();
       
       if (!productInfo || (!productInfo.name && !productInfo.price)) {
-        showNotification('无法识别当前页面的商品信息，请手动在侧边栏输入', 'error');
+        showNotification('Unable to identify product information on current page, please manually enter in sidepanel', 'error');
         return;
       }
     }
     
-    console.log('商品信息提取成功，开始分析:', productInfo);
+    console.log('Product information extracted successfully, starting analysis:', productInfo);
     performAnalysis();
   }
   
-  // 执行分析
+  // Perform analysis
   async function performAnalysis() {
-    // 再次确认商品信息是最新的
+    // Confirm product information is up-to-date again
     if (!productInfo || (!productInfo.name && !productInfo.price)) {
-      console.warn('商品信息为空或不完整，重新提取...');
+      console.warn('Product information is empty or incomplete, re-extracting...');
       await extractProductInfo();
     }
     
     if (!productInfo || (!productInfo.name && !productInfo.price)) {
-      console.error('商品信息为空，无法进行分析');
-      showNotification('商品信息提取失败，请刷新页面后重试', 'error');
+      console.error('Product information is empty, unable to perform analysis');
+      showNotification('Product information extraction failed, please refresh the page and try again', 'error');
       return;
     }
     
-    console.log('执行分析，商品信息:', productInfo);
-    console.log('商品URL:', window.location.href);
+    console.log('Performing analysis, product information:', productInfo);
+    console.log('Product URL:', window.location.href);
     
-    // 保存商品信息到storage，以便侧边栏使用
+    // Save product information to storage for sidepanel use
     try {
-      // 先获取当前标签页ID
+      // First get current tab ID
       let tabId = null;
       try {
         const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -968,23 +1017,23 @@
           tabId = tabs[0].id;
         }
       } catch (e) {
-        console.warn('获取标签页ID失败:', e);
+        console.warn('Failed to get tab ID:', e);
       }
       
-      // 保存到storage
+      // Save to storage
       if (chrome.storage && chrome.storage.local && tabId) {
         await chrome.storage.local.set({
           [`product_${tabId}`]: productInfo
         });
-        console.log('商品信息已保存到storage:', `product_${tabId}`);
+        console.log('Product information saved to storage:', `product_${tabId}`);
         
-        // 同时也保存为current，作为备用
+        // Also save as current as backup
         await chrome.storage.local.set({
           [`product_current`]: productInfo
         });
       }
       
-      // 通知background已保存商品信息
+      // Notify background that product information has been saved
       try {
         chrome.runtime.sendMessage({
           action: 'productInfoExtracted',
@@ -992,17 +1041,17 @@
           tabId: tabId
         }, (response) => {
           if (chrome.runtime.lastError) {
-            console.warn('通知background失败:', chrome.runtime.lastError);
+            console.warn('Failed to notify background:', chrome.runtime.lastError);
           }
         });
       } catch (e) {
-        console.warn('发送通知失败:', e);
+        console.warn('Failed to send notification:', e);
       }
     } catch (e) {
-      console.error('保存商品信息失败:', e);
+      console.error('Failed to save product information:', e);
     }
     
-    // 发送分析请求
+    // Send analysis request
     chrome.runtime.sendMessage({
       action: 'apiRequest',
       endpoint: '/api/shopping/product-analysis',
@@ -1012,42 +1061,42 @@
       }
     }, (response) => {
       if (chrome.runtime.lastError) {
-        console.error('API请求错误:', chrome.runtime.lastError);
-        showNotification('分析失败: ' + chrome.runtime.lastError.message, 'error');
+        console.error('API request error:', chrome.runtime.lastError);
+        showNotification('Analysis failed: ' + chrome.runtime.lastError.message, 'error');
         return;
       }
       
       if (response && response.success) {
-        console.log('分析成功:', response.data);
+        console.log('Analysis successful:', response.data);
         showAnalysis(response.data);
         
-        // 保存分析结果到storage
+        // Save analysis result to storage
         if (chrome.storage && chrome.storage.local) {
           chrome.runtime.sendMessage({ action: 'getCurrentTab' }).then(tab => {
             chrome.storage.local.set({
               [`analysis_${tab?.id || 'current'}`]: response.data
             });
-          }).catch(e => console.warn('保存分析结果失败:', e));
+          }).catch(e => console.warn('Failed to save analysis result:', e));
         }
         
-        // 通知侧边栏更新
+        // Notify sidepanel to update
         chrome.runtime.sendMessage({
           action: 'analysisComplete',
           productData: productInfo,
           analysisData: response.data
-        }).catch(e => console.warn('通知侧边栏失败:', e));
+        }).catch(e => console.warn('Failed to notify sidepanel:', e));
         
-        showNotification('分析完成！请查看侧边栏', 'success');
+        showNotification('Analysis completed! Please check the sidepanel', 'success');
       } else {
-        console.error('分析失败:', response);
-        showNotification('分析失败: ' + (response?.error || '未知错误'), 'error');
+        console.error('Analysis failed:', response);
+        showNotification('Analysis failed: ' + (response?.error || 'Unknown error'), 'error');
       }
     });
   }
   
-  // 显示通知
+  // Show notification
   function showNotification(message, type = 'info') {
-    // 创建通知元素
+    // Create notification element
     const notification = document.createElement('div');
     notification.style.cssText = `
       position: fixed;
@@ -1065,7 +1114,7 @@
     `;
     notification.textContent = message;
     
-    // 添加动画样式
+    // Add animation styles
     if (!document.getElementById('notification-styles')) {
       const style = document.createElement('style');
       style.id = 'notification-styles';
@@ -1086,17 +1135,17 @@
     
     document.body.appendChild(notification);
     
-    // 3秒后自动移除
+    // Auto remove after 3 seconds
     setTimeout(() => {
       notification.style.animation = 'slideIn 0.3s ease-out reverse';
       setTimeout(() => notification.remove(), 300);
     }, 3000);
   }
   
-  // 在商品价格旁边显示价格对比按钮
+  // Display price comparison button next to product price
   function addPriceComparisonButton() {
-    // 这里可以添加价格对比功能
-    // 在商品价格旁边添加一个小按钮
+    // Can add price comparison functionality here
+    // Add a small button next to product price
   }
   
 })();

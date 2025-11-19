@@ -1,61 +1,61 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>智能购物助手</title>
+  <title>Smart Shopping Assistant</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div class="popup-container">
     <div class="popup-header">
-      <h3>🛍️ 智能购物助手</h3>
+      <h3>🛍️ Smart Shopping Assistant</h3>
     </div>
     
     <div class="popup-content">
-      <!-- 当前商品信息 -->
+      <!-- Current Product Information -->
       <div id="current-product" class="product-card" style="display: none;">
         <div class="product-info">
           <h4 id="product-name"></h4>
           <div class="product-price">¥<span id="product-price"></span></div>
         </div>
         <div class="product-actions">
-          <button id="analyze-btn" class="btn-primary">分析商品</button>
-          <button id="compare-btn" class="btn-secondary">价格对比</button>
+          <button id="analyze-btn" class="btn-primary">Analyze Product</button>
+          <button id="compare-btn" class="btn-secondary">Price Comparison</button>
         </div>
       </div>
       
-      <!-- 无商品提示 -->
+      <!-- No Product Prompt -->
       <div id="no-product" class="no-product">
-        <p>请先访问购物网站的商品页面</p>
-        <button id="open-sidepanel-btn" class="btn-primary">打开助手面板</button>
+        <p>Please visit a product page on a shopping website first</p>
+        <button id="open-sidepanel-btn" class="btn-primary">Open Assistant Panel</button>
       </div>
       
-      <!-- 快速操作 -->
+      <!-- Quick Actions -->
       <div class="quick-actions">
         <button id="open-sidepanel" class="action-btn">
           <span class="icon">💬</span>
-          <span>智能聊天</span>
+          <span>Smart Chat</span>
         </button>
         <button id="price-tracker" class="action-btn">
           <span class="icon">📊</span>
-          <span>价格追踪</span>
+          <span>Price Tracker</span>
         </button>
         <button id="compare-prices" class="action-btn">
           <span class="icon">🔍</span>
-          <span>比价</span>
+          <span>Compare Prices</span>
         </button>
         <button id="recommendations" class="action-btn">
           <span class="icon">⭐</span>
-          <span>推荐</span>
+          <span>Recommendations</span>
         </button>
       </div>
       
-      <!-- 状态指示 -->
+      <!-- Status Indicator -->
       <div class="status-bar">
         <div id="connection-status" class="status-item">
           <span class="status-dot"></span>
-          <span>连接中...</span>
+          <span>Connecting...</span>
         </div>
       </div>
     </div>
