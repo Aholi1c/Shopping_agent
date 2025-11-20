@@ -6,17 +6,21 @@
   <component name="ChangeListManager">
     <list default="true" id="9e98fcfc-0b5a-4b84-8472-bd043b6e402c" name="更改" comment="">
       <change afterPath="$PROJECT_DIR$/backend/.env" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/models/models.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/models/models.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/models/schemas.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/models/schemas.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/app/services/conversation_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/services/conversation_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/services/enhanced_rag_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/services/enhanced_rag_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/services/memory_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/services/memory_service.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/app/services/vector_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/services/vector_service.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/app/services/ecommerce_rag_service.py" beforeDir="false" afterPath="$PROJECT_DIR$/backend/app/services/ecommerce_rag_service.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/llm_agent.db" beforeDir="false" afterPath="$PROJECT_DIR$/backend/llm_agent.db" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/backend/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/uploads/vector_store/document_id_mapping.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/uploads/vector_store/document_index.faiss" beforeDir="false" afterPath="$PROJECT_DIR$/backend/uploads/vector_store/document_index.faiss" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/uploads/vector_store/memory_id_mapping.json" beforeDir="false" afterPath="$PROJECT_DIR$/backend/uploads/vector_store/memory_id_mapping.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/uploads/vector_store/memory_index.faiss" beforeDir="false" afterPath="$PROJECT_DIR$/backend/uploads/vector_store/memory_index.faiss" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/browser-extension/css/content.css" beforeDir="false" afterPath="$PROJECT_DIR$/browser-extension/css/content.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/browser-extension/css/popup.css" beforeDir="false" afterPath="$PROJECT_DIR$/browser-extension/css/popup.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/browser-extension/css/sidepanel.css" beforeDir="false" afterPath="$PROJECT_DIR$/browser-extension/css/sidepanel.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/browser-extension/html/popup.html" beforeDir="false" afterPath="$PROJECT_DIR$/browser-extension/html/popup.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/browser-extension/html/sidepanel.html" beforeDir="false" afterPath="$PROJECT_DIR$/browser-extension/html/sidepanel.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/browser-extension/js/sidepanel.js" beforeDir="false" afterPath="$PROJECT_DIR$/browser-extension/js/sidepanel.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/browser-extension/manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/browser-extension/manifest.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -24,11 +28,16 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="Git.Settings">
+    <option name="RECENT_BRANCH_BY_REPOSITORY">
+      <map>
+        <entry key="$PROJECT_DIR$" value="Data" />
+      </map>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 0
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 0
+}</component>
   <component name="ProjectId" id="35e6MrEBzRTV5d7WS058zBX171e" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -40,8 +49,9 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "/Users/yitong/HKU/sem1/7607 NLP/final project/Shopping_agent",
+    "git-widget-placeholder": "ForVideo",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "C:/Users/10109/Desktop/nlp/nlp final/project/Shopping_agent/backend/app/models",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -50,10 +60,18 @@
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\10109\Desktop\nlp\nlp final\project\Shopping_agent\backend\app\models" />
+      <recent name="C:\Users\10109\Desktop\nlp\nlp final\project\Shopping_agent\browser-extension\js" />
+      <recent name="C:\Users\10109\Desktop\nlp\nlp final\project\Shopping_agent\browser-extension\html" />
+      <recent name="C:\Users\10109\Desktop\nlp\nlp final\project\Shopping_agent\browser-extension\css" />
+    </key>
+  </component>
   <component name="SharedIndexes">
     <attachedChunks>
       <set>
-        <option value="bundled-python-sdk-4e2b1448bda8-9a97661f3031-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.27397.106" />
+        <option value="bundled-python-sdk-7e47963ff851-f0eec537fc84-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-252.23892.515" />
       </set>
     </attachedChunks>
   </component>
@@ -70,5 +88,28 @@
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="origin/main" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
 </project>

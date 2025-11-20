@@ -1,3 +1,5 @@
+import logging
+
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from ..models.models import Conversation, Message, User
@@ -264,24 +266,36 @@ class ConversationService:
             self.db.refresh(conversation)
         return conversation
 
-    def _build_enhanced_message_history(self, message_history: List[Dict], memory_context: Dict, rag_context: List = None) -> List[Dict]:
+    def _build_enhanced_message_history(
+        self,
+        message_history: List[Dict],
+        memory_context: Dict,
+        rag_context: List = None,
+        products_context: List[Dict] | None = None,
+    ) -> List[Dict]:
         """
-        构建包含记忆和RAG上下文的增强消息历史
+        构建包含记忆、RAG 和实时商品上下文的增强消息历史
         """
         enhanced_history = []
 
-        # 添加系统提示
+        # 添加系统提示（允许上下文中包含多语言，但最终给用户的自然语言回复必须为英文）
         system_prompt = """You are an AI shopping assistant with memory and knowledge base capabilities. You have access to previous conversations, important information about the user, and a comprehensive shopping database.
 
-Instructions:
-1. **IMPORTANT**: Always remember and actively use user preferences mentioned in previous conversations
-2. If the user mentioned preferences before (brands, price range, features, colors, sizes, etc.), remember and apply them in your recommendations
-3. When the user asks about their preferences or asks you to remember something, acknowledge it and store it in your memory
-4. Use the memory context below to provide personalized and consistent responses
-5. Use the knowledge base information to provide accurate pricing and product information
-6. Refer to previous interactions when relevant
-7. Provide specific price ranges and comparisons when available
-8. Be conversational and natural while using all available context
+Language & output rules:
+1. Your final replies that the user sees must be in clear, natural English only.
+2. You may freely read and reason over any language (including Chinese) that appears in the context below.
+3. Product names, brand names, and other proper nouns may remain in their original language, but you should explain them in English.
+4. If the user writes in Chinese or any other language, first understand their intent, then answer entirely in English (except for unavoidable proper nouns).
+
+Shopping & personalization instructions:
+5. Always remember and actively use user preferences mentioned in previous conversations.
+6. If the user mentioned preferences before (brands, price range, features, colors, sizes, etc.), remember and apply them in your recommendations.
+7. When the user asks about their preferences or asks you to remember something, acknowledge it and store it in your memory.
+8. Use the memory context below to provide personalized and consistent responses.
+9. Use the knowledge base information to provide accurate pricing and product information.
+10. Refer to previous interactions when relevant.
+11. Provide specific price ranges and comparisons when available.
+12. Be conversational and natural while using all available context.
 
 """
 
@@ -308,6 +322,17 @@ When the user says "that one", "it", "the previous one", "那个", "它", "之�
             system_prompt += "Knowledge Base Information (Shopping & Pricing Data):\n"
             for i, result in enumerate(rag_context, 1):
                 system_prompt += f"[KB {i}]: {result.content}\n\n"
+
+        # 添加实时商品候选上下文（如有）
+        if products_context:
+            system_prompt += "Real-time E-commerce Candidates (From live search):\n"
+            for i, product in enumerate(products_context, 1):
+                system_prompt += (
+                    f"[Live Product {i}]: {product.get('title')}\n"
+                    f"  - Price: {product.get('price')} (Original: {product.get('original_price')})\n"
+                    f"  - Rating: {product.get('rating')} | Reviews: {product.get('review_count')} | Sales: {product.get('sales_count')}\n"
+                    f"  - URL: {product.get('product_url')}\n\n"
+                )
 
         # 添加记忆上下文
         if memory_context.get("relevant_memories"):
@@ -346,6 +371,8 @@ When the user says "that one", "it", "the previous one", "那个", "它", "之�
             print(f"  - 其他记忆: {len(other_memories)}")
         if rag_context:
             print(f"包含 {len(rag_context)} 条知识库信息")
+        if products_context:
+            print(f"包含 {len(products_context)} 个实时商品候选（用于价格与商品推荐）")
         # ⭐ 打印当前讨论的商品信息
         if memory_context.get("working_memory", {}).get("context_data", {}).get("current_products"):
             current_products = memory_context["working_memory"]["context_data"]["current_products"]

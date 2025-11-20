@@ -1,239 +1,82 @@
 /**
  * Content Script Styles
- * 注入到购物网站页面的样式（与侧边栏视觉统一）
+ * 注入到购物网站页面的样式
  */
 
-/* 主题变量（与 sidepanel.css 保持一致）作用于通知卡片作用域，避免污染页面 */
-.shopping-assistant-notification {
-  --sp-bg: #ffffff;
-  --sp-surface: #f8f9fa;
-  --sp-surface-alt: #eef1f4;
-  --sp-header-bg: #232f3e;
-  --sp-header-bg-alt: #131921;
-  --sp-text: #1f2a38;
-  --sp-text-light: #5a6270;
-  --sp-border: #d5d9dc;
-  --sp-border-light: #e3e6e8;
-  --sp-accent: #ffa41c;
-  --sp-accent-alt: #ff9900;
-  --sp-accent-soft: #febd69;
-  --sp-danger: #d93025;
-  --sp-radius-sm: 4px;
-  --sp-radius-md: 8px;
-  --sp-radius-lg: 14px;
-  --sp-shadow-sm: 0 1px 2px rgba(0,0,0,.06);
-  --sp-shadow-md: 0 4px 12px rgba(0,0,0,.08);
-  --sp-shadow-pop: 0 6px 16px rgba(0,0,0,.12);
-  --sp-gradient-primary: linear-gradient(90deg, var(--sp-accent-alt) 0%, var(--sp-accent) 100%);
-  --sp-gradient-secondary: linear-gradient(90deg, #37475a 0%, #232f3e 100%);
-}
+/* 浮动助手按钮样式已在content.js中内联 */
 
 /* 商品信息提示卡片 */
 .shopping-assistant-notification {
   position: fixed;
   top: 20px;
   right: 20px;
-  width: 320px;
-  background: var(--sp-bg);
-  border-radius: var(--sp-radius-md);
-  box-shadow: var(--sp-shadow-md);
-  z-index: 2147483646; /* 高于大多数网站浮层 */
-  padding: 14px 14px 12px;
-  border: 1px solid var(--sp-border-light);
-  color: var(--sp-text);
-  font-family: "Amazon Ember", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  animation: sa-slideIn 0.25s ease-out;
-  backdrop-filter: saturate(120%) blur(2px);
+  width: 300px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 999998;
+  padding: 16px;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 .shopping-assistant-notification h4 {
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 8px;
-  color: var(--sp-text);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.shopping-assistant-notification h4 .badge {
-  display: inline-block;
-  padding: 2px 8px;
-  font-size: 11px;
-  border-radius: 12px;
-  background: var(--sp-accent-soft);
-  color: #222;
-  border: 1px solid rgba(255,153,0,.4);
-}
-
-.shopping-assistant-notification .sa-subtitle {
-  font-size: 12px;
-  color: var(--sp-text-light);
-  margin-top: -2px;
-  margin-bottom: 8px;
+  color: #333;
 }
 
 .shopping-assistant-notification .close-btn {
   position: absolute;
   top: 8px;
   right: 8px;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--sp-border-light);
-  background: #fff;
-  border-radius: var(--sp-radius-sm);
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
   cursor: pointer;
-  font-size: 16px;
-  color: var(--sp-text-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--sp-shadow-sm);
-  transition: background .18s, border-color .18s, color .18s;
+  font-size: 18px;
+  color: #999;
 }
 
 .shopping-assistant-notification .close-btn:hover {
-  background: var(--sp-surface);
-  color: var(--sp-text);
-  border-color: var(--sp-border);
+  color: #333;
 }
-
-.shopping-assistant-notification .sa-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.shopping-assistant-notification .btn-primary {
-  flex: 1;
-  padding: 9px 12px;
-  background: var(--sp-gradient-primary);
-  color: #222;
-  border: 1px solid rgba(255,153,0,.7);
-  border-radius: var(--sp-radius-md);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .2px;
-  box-shadow: 0 2px 4px rgba(0,0,0,.06), 0 2px 8px rgba(255,153,0,.2);
-  transition: filter .18s, box-shadow .18s;
-}
-
-.shopping-assistant-notification .btn-primary:hover {
-  filter: brightness(1.02);
-  box-shadow: 0 4px 10px rgba(0,0,0,.12), 0 3px 10px rgba(255,153,0,.28);
-}
-
-.shopping-assistant-notification .btn-secondary {
-  flex: 1;
-  padding: 9px 12px;
-  background: #fff;
-  color: var(--sp-header-bg);
-  border: 1px solid var(--sp-header-bg);
-  border-radius: var(--sp-radius-md);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .2px;
-  box-shadow: var(--sp-shadow-sm);
-}
-
-.shopping-assistant-notification .btn-secondary:hover {
-  background: var(--sp-surface-alt);
-}
-
-/* 内容区域排版 */
-.shopping-assistant-notification .sa-section {
-  background: #fff;
-  border: 1px solid var(--sp-border-light);
-  border-radius: var(--sp-radius-md);
-  padding: 10px 12px;
-  margin-top: 8px;
-}
-
-.shopping-assistant-notification .sa-section h5 {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--sp-text);
-  margin-bottom: 6px;
-}
-
-.shopping-assistant-notification .sa-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--sp-border-light);
-}
-
-.shopping-assistant-notification .sa-item:last-child { border-bottom: none; }
-.shopping-assistant-notification .sa-item label { font-size: 12px; color: var(--sp-text-light); }
-.shopping-assistant-notification .sa-item span { font-size: 13px; font-weight: 600; color: var(--sp-text); }
-.shopping-assistant-notification .sa-item .price { color: var(--sp-accent-alt); }
 
 /* 价格对比标签 */
 .price-comparison-badge {
   display: inline-block;
   padding: 4px 8px;
-  background: var(--sp-accent);
-  color: #222;
-  border: 1px solid rgba(255,153,0,.55);
-  border-radius: var(--sp-radius-sm);
+  background: #52c41a;
+  color: white;
+  border-radius: 4px;
   font-size: 12px;
   margin-left: 8px;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 1px 6px rgba(255,153,0,.2);
 }
 
-.price-comparison-badge:hover { filter: brightness(1.03); }
-
-/* 商品分析提示气泡 */
+/* 商品分析提示 */
 .product-analysis-hint {
   position: absolute;
   top: -30px;
   right: 0;
   padding: 6px 12px;
-  background: var(--sp-header-bg);
-  background-image: var(--sp-gradient-secondary);
-  color: #fff;
-  border-radius: var(--sp-radius-sm);
+  background: #667eea;
+  color: white;
+  border-radius: 4px;
   font-size: 12px;
   cursor: pointer;
-  z-index: 2147483645;
-  box-shadow: var(--sp-shadow-pop);
+  z-index: 1000;
 }
 
-/* 代码/强调文本样式，与侧边栏统一 */
-.shopping-assistant-notification code,
-.shopping-assistant-notification pre {
-  font-family: Consolas, 'Courier New', monospace;
-  background: #fff4d6;
-  padding: 2px 4px;
-  border-radius: 4px;
-  border: 1px solid #ffe2a8;
-}
-
-/* 加载/错误状态 */
-.shopping-assistant-notification .loading { font-size: 12px; color: var(--sp-text-light); }
-.shopping-assistant-notification .error {
-  background: #ffeded;
-  border: 1px solid #ffb9b3;
-  padding: 10px 12px;
-  border-radius: var(--sp-radius-md);
-  font-size: 12px;
-  color: #8a1f13;
-  box-shadow: var(--sp-shadow-sm);
-}
-
-/* 流式输出时的高亮（可与后台SSE联动）*/
-.shopping-assistant-notification .streaming-active {
-  background: #fffef8;
-  border-color: var(--sp-accent-soft);
-  box-shadow: 0 0 0 1px rgba(255,164,28,.25), 0 2px 6px rgba(255,153,0,.15);
-}
-
-/* 动画与辅助样式 */
-@keyframes sa-slideIn {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}

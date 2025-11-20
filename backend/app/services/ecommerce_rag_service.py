@@ -11,6 +11,7 @@
 
 from typing import Any, Dict, List, Optional
 import json
+import logging
 
 from sqlalchemy.orm import Session
 
@@ -24,6 +25,7 @@ from .memory_service import MemoryService
 from .media_service import MediaService
 from .onebound_api_client import onebound_api_client
 
+logger = logging.getLogger(__name__)
 
 PHONE_KB_NAME = "手机导购知识库"
 
@@ -241,13 +243,20 @@ class EcommerceRAGService:
         all_products: List[Any] = []
 
         async def _search_with_query_base(q_base: str) -> List[Any]:
-            # 将 q_base + raw_keywords 合成最终检索词
+            # 用 q_base + raw_keywords 合成最终检索词
             parts: List[str] = []
             if q_base:
                 parts.append(q_base)
             if raw_keywords:
                 parts.append(raw_keywords)
             final_q = " ".join(dict.fromkeys(" ".join(parts).split())) or q_base
+
+            logger.info(
+                "[Onebound 推荐链路] q_base=%s | raw_keywords=%s | final_q=%s",
+                q_base,
+                raw_keywords,
+                final_q,
+            )
 
             return await self._search_taobao_for_recommendation(
                 final_q,
@@ -381,7 +390,7 @@ class EcommerceRAGService:
      2. 在候选商品中选出 3 个最推荐的，并说明推荐理由（结合价格、评价、销量、折扣等）；                                                                                                                                                                
      3. 指出不太推荐的典型坑点或需要避免的情况；                                                                                                                                                                                                       
      4. 明确给出最终推荐列表（用编号列出：商品名 + 淘宝链接）。                                                                                                                                                                                        
-     请用中文回答。                                                                                                                                                                                                                                    
+     请用英文回答。                                                                                                                                                                                                                                    
      """
 
         if not self.llm_service:
