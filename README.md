@@ -1,6 +1,8 @@
 # 🛍️ 智能购物助手 LLM Agent
 
-一个功能齐全的增强多模态大语言模型代理应用，专注于智能购物助手功能，支持文本、图像、语音交互，并集成记忆系统、RAG增强和多Agent协作功能。
+This project is the final project of the COMP7607B Natural Language Processing course at the University of Hong Kong. 
+A fully functional enhanced multimodal large language model Agent application, focusing on the intelligent shopping assistant function, supporting text, image, and voice interaction, and integrating a memory system, RAG enhancement, and multi-agent collaboration functions.
+
 
 ## 🚀 最新更新 (v2.3.0)
 
